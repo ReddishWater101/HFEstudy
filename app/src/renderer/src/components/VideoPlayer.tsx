@@ -15,6 +15,8 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
   const startedPlayCountRef = useRef(0);
   const completedPlayCountRef = useRef(0);
   const countedCurrentPlayRef = useRef(false);
+  const [startedPlayCount, setStartedPlayCount] = useState(0);
+  const [completedPlayCount, setCompletedPlayCount] = useState(0);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
@@ -23,6 +25,8 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
     startedPlayCountRef.current = 0;
     completedPlayCountRef.current = 0;
     countedCurrentPlayRef.current = false;
+    setStartedPlayCount(0);
+    setCompletedPlayCount(0);
     setHasLoadError(false);
 
     if (!video) {
@@ -38,6 +42,7 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
     if (video && !countedCurrentPlayRef.current && video.currentTime <= START_THRESHOLD_SECONDS) {
       startedPlayCountRef.current += 1;
       countedCurrentPlayRef.current = true;
+      setStartedPlayCount(startedPlayCountRef.current);
       onPlayCountChange?.(startedPlayCountRef.current);
     }
 
@@ -50,6 +55,7 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
 
   function handleEnded() {
     completedPlayCountRef.current += 1;
+    setCompletedPlayCount(completedPlayCountRef.current);
     onEnded?.(completedPlayCountRef.current);
   }
 
@@ -84,6 +90,8 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
     await playVideo(video, 'replay');
   }
 
+  const canReplay = completedPlayCount >= 1 && startedPlayCount < 2;
+
   return (
     <div className="flex flex-col items-center gap-4">
       <video
@@ -99,7 +107,12 @@ export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPla
       />
 
       <div className="flex items-center gap-6 text-sm text-neutral-500">
-        <Button onClick={handleReplay} type="button" className="hover:text-neutral-900">
+        <Button
+          onClick={handleReplay}
+          type="button"
+          disabled={!canReplay}
+          className="hover:text-neutral-900"
+        >
           Replay from start
         </Button>
       </div>

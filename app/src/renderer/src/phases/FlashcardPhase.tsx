@@ -87,7 +87,7 @@ export function FlashcardPhase({ sessionLabel }: { sessionLabel: 'A' | 'B' }) {
           <TimerBar durationSec={durationSec} onComplete={handleTimerComplete} />
         </div>
 
-        <FlashCard person={currentPerson} mode={mode} />
+        <FlashCard key={currentPerson.id} person={currentPerson} mode={mode} />
 
         <BucketButtons onBucket={handleBucket} />
       </div>

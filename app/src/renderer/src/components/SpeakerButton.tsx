@@ -7,7 +7,7 @@ export function SpeakerButton({ onClick }: { onClick: () => void }) {
       aria-label="Replay name"
       className="text-sm text-neutral-400 hover:text-neutral-900"
     >
-      ◁ play name
+      ▶ play name
     </Button>
   );
 }

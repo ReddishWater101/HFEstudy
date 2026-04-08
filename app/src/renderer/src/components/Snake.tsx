@@ -112,6 +112,10 @@ export function Snake({ onScore, onGameOver }: SnakeProps) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      ctx.strokeStyle = '#e5e5e5';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+
       ctx.fillStyle = '#171717';
       for (const seg of cur.snake) {
         ctx.fillRect(seg.x * CELL, seg.y * CELL, CELL - 1, CELL - 1);
