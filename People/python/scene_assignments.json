@@ -1,0 +1,102 @@
+{
+  "Aaron": {
+    "activity": "wiping their forehead with a small towel",
+    "environment": "a busy gym"
+  },
+  "Adrian": {
+    "activity": "standing near tropical plants",
+    "environment": "a botanical garden greenhouse"
+  },
+  "Aisha": {
+    "activity": "standing in front of a colorful painting",
+    "environment": "a small art gallery"
+  },
+  "Brian": {
+    "activity": "examining a tool from the shelf",
+    "environment": "a hardware store aisle"
+  },
+  "Carlos": {
+    "activity": "carrying a small stack of books",
+    "environment": "a college campus quad"
+  },
+  "Christine": {
+    "activity": "browsing a shelf of paperbacks",
+    "environment": "a neighborhood bookstore"
+  },
+  "Deborah": {
+    "activity": "leaning against a desk with a textbook in hand",
+    "environment": "a bright school classroom"
+  },
+  "Edward": {
+    "activity": "with ocean waves rolling behind them",
+    "environment": "a sandy beach boardwalk"
+  },
+  "Hassan": {
+    "activity": "with a small rolling suitcase beside them",
+    "environment": "a hotel lobby"
+  },
+  "Jason": {
+    "activity": "rolling up a yoga mat",
+    "environment": "a sunlit yoga studio"
+  },
+  "Jeffrey": {
+    "activity": "wearing a lanyard with a name badge",
+    "environment": "a tech conference floor"
+  },
+  "Jonathan": {
+    "activity": "standing beside a desk with a closed laptop under one arm",
+    "environment": "a modern open-plan office"
+  },
+  "Kevin": {
+    "activity": "holding a hanger with a denim jacket",
+    "environment": "a vintage thrift store"
+  },
+  "Lily": {
+    "activity": "holding a small shopping basket",
+    "environment": "a grocery store aisle"
+  },
+  "Linda": {
+    "activity": "standing near a bench with sunglasses pushed up on their head",
+    "environment": "a sunny city park"
+  },
+  "Megan": {
+    "activity": "holding a paper bag of fresh produce",
+    "environment": "a lively farmers market"
+  },
+  "Mike": {
+    "activity": "holding a large bag of popcorn",
+    "environment": "a movie theater lobby"
+  },
+  "Nina": {
+    "activity": "looking up from a menu",
+    "environment": "a casual restaurant"
+  },
+  "Olivia": {
+    "activity": "with a backpack over one shoulder",
+    "environment": "an airport terminal near a tall window"
+  },
+  "Omar": {
+    "activity": "holding a casual drink",
+    "environment": "a rooftop bar at golden hour"
+  },
+  "Priya": {
+    "activity": "shuffling a deck of cards at a wooden table",
+    "environment": "a board game cafe"
+  },
+  "Sarah": {
+    "activity": "flipping through vinyl records in a wooden bin",
+    "environment": "a vintage record store"
+  },
+  "Sharon": {
+    "activity": "arranging stems in a colorful bouquet",
+    "environment": "a small flower shop"
+  },
+  "Victoria": {
+    "activity": "holding a tasting flight of beers",
+    "environment": "a craft brewery taproom"
+  },
+  "Wei": {
+    "activity": "holding a warm latte",
+    "environment": "a cozy coffee shop"
+  }
+}

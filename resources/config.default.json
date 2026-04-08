@@ -1,0 +1,12 @@
+{
+  "numberOfPeople": 16,
+  "numFlashcardSessions": 2,
+  "flashcardSessionDurationSec": 420,
+  "snakeDurationSec": 120,
+  "recallTimePerFaceSec": 15,
+  "phraseMinChars": 8,
+  "fuzzyMatchMaxEdits": 2,
+  "mandatorySecondVideoPlay": true,
+  "assetsPath": "./People",
+  "exportPath": "./exports"
+}

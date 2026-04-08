@@ -1,0 +1,57 @@
+appId: com.hfestudy.app
+productName: HFE Study
+copyright: Copyright © 2026
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/.DS_Store'
+
+extraResources:
+  - from: People/PFP
+    to: People/PFP
+    filter: ['**/*.png']
+  - from: People/videos
+    to: People/videos
+    filter: ['**/*.mp4']
+  - from: People/audio
+    to: People/audio
+    filter: ['**/*.m4a']
+  - from: resources/config.default.json
+    to: config.default.json
+
+asar: true
+
+mac:
+  category: public.app-category.education
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: true
+
+publish: null
