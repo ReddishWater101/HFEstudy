@@ -20,24 +20,28 @@ jobs:
             build: npm run package:mac
             artifact-name: macos
             artifact-paths: |
-              release/**/*.dmg
-              release/**/*.dmg.blockmap
-              release/**/latest-mac.yml
+              app/release/**/*.dmg
+              app/release/**/*.dmg.blockmap
+              app/release/**/latest-mac.yml
           - os: windows-latest
             build: npm run package:win
             artifact-name: windows
             artifact-paths: |
-              release/**/*.exe
-              release/**/*.exe.blockmap
-              release/**/latest.yml
+              app/release/**/*.exe
+              app/release/**/*.exe.blockmap
+              app/release/**/latest.yml
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version-file: app/.nvmrc
           cache: npm
+          cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
         run: npm ci

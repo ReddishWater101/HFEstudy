@@ -4,7 +4,7 @@ copyright: Copyright © 2026
 
 directories:
   output: release/${version}
-  buildResources: build
+  buildResources: ../build
 
 files:
   - out/**/*
@@ -28,7 +28,7 @@ asar: true
 
 mac:
   category: public.app-category.education
-  icon: build/icon.icns
+  icon: ../build/icon.icns
   target:
     - target: dmg
       arch:
@@ -39,7 +39,7 @@ dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 win:
-  icon: build/icon.ico
+  icon: ../build/icon.ico
   target:
     - target: nsis
       arch:

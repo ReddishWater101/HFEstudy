@@ -4,42 +4,49 @@ A cross-platform desktop application built with Electron, React, TypeScript, and
 
 ## Prerequisites
 
-- Node.js (version pinned in [`.nvmrc`](./.nvmrc))
+- Node.js (version pinned in [`app/.nvmrc`](./app/.nvmrc))
 - npm
 
 ## Quick start
 
+All app commands run from inside `app/`:
+
 ```bash
+cd app
 npm install
 npm run dev
 ```
 
-The dev server runs the renderer with hot module replacement and launches Electron pointing at it. Edit anything under `src/` and the app reloads automatically.
+The dev server runs the renderer with hot module replacement and launches Electron pointing at it. Edit anything under `app/src/` and the app reloads automatically.
 
-## Project structure
+## Repo layout
 
 ```
-src/
-├── main/              # Electron main process (Node runtime)
-│   └── index.ts       # App lifecycle and window creation
-├── preload/           # Secure bridge between main and renderer
-│   ├── index.ts       # contextBridge.exposeInMainWorld
-│   └── index.d.ts     # window.api type augmentation
-└── renderer/          # React app (Chromium runtime)
-    ├── index.html
-    └── src/
-        ├── main.tsx
-        ├── App.tsx
-        └── styles/
+HFEstudy/
+├── CLAUDE.md          # Conventions for AI assistants
+├── README.md          # This file
+├── docs/              # Project documentation (study spec, midterm report, mockups)
+├── build/             # electron-builder icon resources (icon.icns, icon.ico)
+└── app/               # The Electron app — everything runnable lives here
+    ├── src/
+    │   ├── main/      # Electron main process (Node runtime)
+    │   ├── preload/   # contextBridge between main and renderer
+    │   └── renderer/  # React app (Chromium runtime)
+    ├── People/        # Study assets (PFP/, videos/, audio/) — paired by first name
+    ├── resources/     # Bundled defaults (config.default.json)
+    ├── scripts/       # Tooling (generate-audio.mjs)
+    ├── package.json
+    ├── electron.vite.config.ts
+    ├── electron-builder.yml
+    └── tsconfig.json, postcss.config.cjs, tailwind.config.ts, ...
 ```
 
 ### Why this layout
 
-- **Strict process separation.** The main process is Node-privileged; the renderer is a sandboxed browser. They never share modules directly.
+- **`app/` is self-contained.** Everything needed to run, build, and package the Electron app lives under `app/`. The repo root holds only documentation and shared build resources.
+- **Strict process separation inside the app.** The main process is Node-privileged; the renderer is a sandboxed browser. They never share modules directly.
 - **Preload bridge.** The renderer cannot call Node directly. All cross-process communication goes through `contextBridge` in the preload script — the only secure pattern.
-- **Path alias.** `@/*` resolves to the renderer source. Configured in both `tsconfig.json` and `electron.vite.config.ts`.
-
-Subdirectories like `components/`, `hooks/`, `pages/`, `lib/` should be created when there's a real reason to — not before.
+- **Path alias.** `@/*` resolves to the renderer source. Configured in both `app/tsconfig.json` and `app/electron.vite.config.ts`.
 
 ## Scripts
 
@@ -85,11 +92,11 @@ These can be added later without changes to the app itself.
 
 ## Build resources
 
-`build/` holds platform assets used by `electron-builder`:
+`build/` (at the repo root) holds platform icon assets used by `electron-builder`:
 - `icon.icns` (macOS, 1024×1024)
 - `icon.ico` (Windows, multi-resolution)
 
-These are placeholders until real assets are added.
+These are placeholders until real assets are added. `app/electron-builder.yml` references them via `../build/`.
 
 ## Running a study session
 
@@ -148,14 +155,14 @@ Re-run after each install.
 
 ## Asset requirements
 
-People assets live under `People/` next to the app and are paired by first name:
+People assets live under `app/People/` and are paired by first name:
 
 ```
-People/
+app/People/
 ├── PFP/{Name}.png       — square headshot
 ├── videos/{Name}.mp4    — short intro video
 └── audio/{Name}.m4a     — pre-rendered name pronunciation
 ```
 
-A person is included only if all three files exist with matching stems. Names that are missing one of the three are silently dropped at scan time. Re-running `scripts/generate-audio.mjs` regenerates the audio files (e.g., when names change).
+A person is included only if all three files exist with matching stems. Names that are missing one of the three are silently dropped at scan time. Re-running `app/scripts/generate-audio.mjs` regenerates the audio files (e.g., when names change).
 
