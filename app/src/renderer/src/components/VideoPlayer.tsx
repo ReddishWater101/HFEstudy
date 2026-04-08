@@ -1,59 +1,110 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/Button';
+
+const START_THRESHOLD_SECONDS = 0.15;
 
 export type VideoPlayerProps = {
   src: string;
+  title: string;
   onPlayCountChange?: (count: number) => void;
-  onEnded?: () => void;
+  onEnded?: (count: number) => void;
 };
 
-export function VideoPlayer({ src, onPlayCountChange, onEnded }: VideoPlayerProps) {
+export function VideoPlayer({ src, title, onPlayCountChange, onEnded }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const playCountRef = useRef(0);
+  const startedPlayCountRef = useRef(0);
+  const completedPlayCountRef = useRef(0);
+  const countedCurrentPlayRef = useRef(false);
+  const [hasLoadError, setHasLoadError] = useState(false);
 
-  // Reset count + autoplay when src changes
   useEffect(() => {
-    playCountRef.current = 0;
-    const v = videoRef.current;
-    if (!v) return;
-    v.currentTime = 0;
-    void v.play().catch((err) => {
-      console.warn('VideoPlayer autoplay failed:', err);
-    });
+    const video = videoRef.current;
+
+    startedPlayCountRef.current = 0;
+    completedPlayCountRef.current = 0;
+    countedCurrentPlayRef.current = false;
+    setHasLoadError(false);
+
+    if (!video) {
+      return;
+    }
+
+    restartVideo(video);
+    void playVideo(video, 'autoplay');
   }, [src]);
 
   function handlePlay() {
-    playCountRef.current += 1;
-    onPlayCountChange?.(playCountRef.current);
+    const video = videoRef.current;
+    if (video && !countedCurrentPlayRef.current && video.currentTime <= START_THRESHOLD_SECONDS) {
+      startedPlayCountRef.current += 1;
+      countedCurrentPlayRef.current = true;
+      onPlayCountChange?.(startedPlayCountRef.current);
+    }
+
+    setHasLoadError(false);
   }
 
-  async function handleReplay() {
-    const v = videoRef.current;
-    if (!v) return;
-    v.pause();
-    v.currentTime = 0;
+  function handleError() {
+    setHasLoadError(true);
+  }
+
+  function handleEnded() {
+    completedPlayCountRef.current += 1;
+    onEnded?.(completedPlayCountRef.current);
+  }
+
+  function restartVideo(video: HTMLVideoElement) {
+    countedCurrentPlayRef.current = false;
+    video.pause();
+
     try {
-      await v.play();
+      video.currentTime = 0;
     } catch (err) {
-      console.warn('VideoPlayer replay failed:', err);
+      console.warn('VideoPlayer seek failed:', err);
+    }
+
+    video.load();
+  }
+
+  async function playVideo(video: HTMLVideoElement, label: string) {
+    try {
+      await video.play();
+    } catch (err) {
+      console.warn(`VideoPlayer ${label} failed:`, err);
     }
   }
 
+  async function handleReplay() {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    restartVideo(video);
+    await playVideo(video, 'replay');
+  }
+
   return (
-    <div className="flex flex-col items-center gap-6">
+    <div className="flex flex-col items-center gap-4">
       <video
-        key={src}
         ref={videoRef}
         src={src}
         preload="auto"
         playsInline
+        aria-label={title}
         onPlay={handlePlay}
-        onEnded={onEnded}
-        className="max-h-[60vh] w-auto"
+        onError={handleError}
+        onEnded={handleEnded}
+        className="max-h-[60vh] w-full"
       />
-      <Button onClick={handleReplay} className="text-sm text-neutral-500 hover:text-neutral-900">
-        Replay
-      </Button>
+
+      <div className="flex items-center gap-6 text-sm text-neutral-500">
+        <Button onClick={handleReplay} type="button" className="hover:text-neutral-900">
+          Replay from start
+        </Button>
+      </div>
+
+      {hasLoadError && <div className="text-sm text-neutral-500">Video unavailable.</div>}
     </div>
   );
 }

@@ -8,10 +8,28 @@ import { useDispatch, useSession } from '../state/SessionProvider';
 export function IntroVideoPhase() {
   const { phase, people, modeAssignment } = useSession();
   const dispatch = useDispatch();
-  const [phraseMinChars, setPhraseMinChars] = useState(8);
+  const [introConfig, setIntroConfig] = useState({
+    phraseMinChars: 8,
+    mandatorySecondVideoPlay: true,
+  });
 
   useEffect(() => {
-    void window.api.getConfig().then((cfg) => setPhraseMinChars(cfg.phraseMinChars));
+    let cancelled = false;
+
+    void window.api.getConfig().then((cfg) => {
+      if (cancelled) {
+        return;
+      }
+
+      setIntroConfig({
+        phraseMinChars: cfg.phraseMinChars,
+        mandatorySecondVideoPlay: cfg.mandatorySecondVideoPlay,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (phase.kind !== 'intro') return null;
@@ -31,7 +49,8 @@ export function IntroVideoPhase() {
       index={index}
       total={people.length}
       phraseRequired={phraseRequired}
-      phraseMinChars={phraseMinChars}
+      phraseMinChars={introConfig.phraseMinChars}
+      mandatorySecondVideoPlay={introConfig.mandatorySecondVideoPlay}
       onAdvance={() => {
         const next = index + 1;
         if (next >= people.length) {
@@ -50,6 +69,7 @@ type IntroPersonViewProps = {
   total: number;
   phraseRequired: boolean;
   phraseMinChars: number;
+  mandatorySecondVideoPlay: boolean;
   onAdvance: () => void;
 };
 
@@ -59,15 +79,15 @@ function IntroPersonView({
   total,
   phraseRequired,
   phraseMinChars,
+  mandatorySecondVideoPlay,
   onAdvance,
 }: IntroPersonViewProps) {
   const dispatch = useDispatch();
-  const [playCount, setPlayCount] = useState(0);
+  const [completedPlayCount, setCompletedPlayCount] = useState(0);
   const [firstPlayEnded, setFirstPlayEnded] = useState(false);
   const [phrase, setPhrase] = useState('');
 
   function handlePlayCountChange(count: number) {
-    setPlayCount(count);
     void window.api.logEvent({
       type: 'intro.video.play',
       t: Date.now(),
@@ -76,8 +96,11 @@ function IntroPersonView({
     });
   }
 
-  function handleEnded() {
-    setFirstPlayEnded(true);
+  function handleEnded(count: number) {
+    setCompletedPlayCount(count);
+    if (count >= 1) {
+      setFirstPlayEnded(true);
+    }
   }
 
   function handlePhraseChange(value: string) {
@@ -92,7 +115,7 @@ function IntroPersonView({
 
   function handleNext() {
     if (phraseRequired) {
-      dispatch({ type: 'setMemoryPhrase', personId: person.id, phrase });
+      dispatch({ type: 'setMemoryPhrase', personId: person.id, phrase: phrase.trim() });
     }
     void window.api.logEvent({
       type: 'intro.advance',
@@ -102,9 +125,14 @@ function IntroPersonView({
     onAdvance();
   }
 
-  const phraseValid = !phraseRequired || phrase.length >= phraseMinChars;
-  const canAdvance = playCount >= 2 && phraseValid;
+  const phraseLength = phrase.trim().length;
+  const phraseValid = !phraseRequired || phraseLength >= phraseMinChars;
+  const requiredCompletedPlays = mandatorySecondVideoPlay ? 2 : 1;
+  const replayRequirementMet = completedPlayCount >= requiredCompletedPlays;
+  const canAdvance = firstPlayEnded && replayRequirementMet && phraseValid;
   const showPhraseInput = phraseRequired && firstPlayEnded;
+
+  const showReplayHint = firstPlayEnded && !replayRequirementMet;
 
   return (
     <Layout>
@@ -113,12 +141,13 @@ function IntroPersonView({
           Person {index + 1} of {total}
         </div>
 
-        <h2 className="font-display text-4xl text-neutral-900 text-center">
+        <h2 className="font-display text-center text-4xl text-neutral-900">
           {person.firstName}
         </h2>
 
         <VideoPlayer
           src={person.videoUrl}
+          title={`${person.firstName} introduction video`}
           onPlayCountChange={handlePlayCountChange}
           onEnded={handleEnded}
         />
@@ -128,20 +157,23 @@ function IntroPersonView({
             <Input
               value={phrase}
               onChange={(e) => handlePhraseChange(e.target.value)}
-              placeholder={`Type a memory phrase (min ${phraseMinChars} chars)…`}
+              placeholder={`Type a memory phrase (min ${phraseMinChars} chars)...`}
               autoFocus
             />
           </div>
         )}
 
-        <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-2">
+          {showReplayHint && (
+            <div className="text-sm text-neutral-500">Replay once to continue.</div>
+          )}
           <Button
             variant="primary"
             onClick={handleNext}
             disabled={!canAdvance}
             className="self-end"
           >
-            Next →
+            Next {'->'}
           </Button>
         </div>
       </div>
