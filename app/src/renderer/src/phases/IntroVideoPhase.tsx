@@ -150,6 +150,20 @@ function IntroPersonView({
           title={`${person.firstName} introduction video`}
           onPlayCountChange={handlePlayCountChange}
           onEnded={handleEnded}
+          onLoadError={() => {
+            void window.api.logEvent({
+              type: 'intro.video.error',
+              t: Date.now(),
+              personId: person.id,
+            });
+          }}
+          onStall={() => {
+            void window.api.logEvent({
+              type: 'intro.video.stall',
+              t: Date.now(),
+              personId: person.id,
+            });
+          }}
         />
 
         {showPhraseInput && (

@@ -33,6 +33,8 @@ declare global {
         people: { id: string; firstName: string }[];
       }
     | { type: 'intro.video.play'; t: number; personId: string; playCount: number }
+    | { type: 'intro.video.error'; t: number; personId: string }
+    | { type: 'intro.video.stall'; t: number; personId: string }
     | { type: 'intro.phrase.input'; t: number; personId: string; phrase: string }
     | { type: 'intro.advance'; t: number; personId: string }
     | {
