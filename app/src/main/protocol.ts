@@ -35,6 +35,12 @@ export function registerAppProtocolHandler(): void {
     if (!filePath) {
       return new Response('Not found', { status: 404 });
     }
-    return net.fetch(pathToFileURL(filePath).toString());
+    // Forward the original request headers (especially Range) so that
+    // Chromium's media stack can seek / replay videos correctly.
+    const fileUrl = pathToFileURL(filePath).toString();
+    return net.fetch(fileUrl, {
+      method: request.method,
+      headers: request.headers,
+    });
   });
 }

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './ui/Button';
 
 const START_THRESHOLD_SECONDS = 0.15;
 const STALL_THRESHOLD_MS = 5000;
+const MAX_AUTO_RETRIES = 3;
+const RETRY_DELAY_MS = 300;
 
 export type VideoPlayerProps = {
   src: string;
@@ -13,6 +15,12 @@ export type VideoPlayerProps = {
   onStall?: () => void;
 };
 
+/**
+ * Robust video player that supports replay and automatic retry on transient
+ * errors.  Uses a React `key` to force a fresh <video> element when the src
+ * changes OR when a retry/replay is needed, which avoids stale-state bugs
+ * that occur when reusing a single element across plays.
+ */
 export function VideoPlayer({
   src,
   title,
@@ -27,11 +35,15 @@ export function VideoPlayer({
   const countedCurrentPlayRef = useRef(false);
   const stallTimerRef = useRef<number | null>(null);
   const hasUsedReplayRef = useRef(false);
+  const autoRetryCountRef = useRef(0);
+
   const [startedPlayCount, setStartedPlayCount] = useState(0);
   const [completedPlayCount, setCompletedPlayCount] = useState(0);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [isStalled, setIsStalled] = useState(false);
   const [hasUsedReplay, setHasUsedReplay] = useState(false);
+  // Incrementing videoKey forces React to mount a brand-new <video> element.
+  const [videoKey, setVideoKey] = useState(0);
 
   function clearStallTimer() {
     if (stallTimerRef.current !== null) {
@@ -40,32 +52,51 @@ export function VideoPlayer({
     }
   }
 
+  // Reset everything when the src changes (new person).
   useEffect(() => {
-    const video = videoRef.current;
-
     startedPlayCountRef.current = 0;
     completedPlayCountRef.current = 0;
     countedCurrentPlayRef.current = false;
     hasUsedReplayRef.current = false;
+    autoRetryCountRef.current = 0;
     setStartedPlayCount(0);
     setCompletedPlayCount(0);
     setHasLoadError(false);
     setIsStalled(false);
     setHasUsedReplay(false);
     clearStallTimer();
-
-    if (!video) {
-      return;
-    }
-
-    restartVideo(video);
-    void playVideo(video, 'autoplay');
+    // Force a fresh video element for the new src.
+    setVideoKey((k) => k + 1);
 
     return () => {
       clearStallTimer();
-      setIsStalled(false);
     };
   }, [src]);
+
+  // Autoplay whenever the video element mounts (new key).
+  const videoCallbackRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      // Keep the mutable ref in sync
+      (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = node;
+      if (!node) return;
+
+      // Wait for enough data to be buffered, then play.
+      const attemptPlay = () => {
+        node.play().catch((err) => {
+          console.warn('VideoPlayer autoplay failed:', err);
+        });
+      };
+
+      if (node.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        attemptPlay();
+      } else {
+        node.addEventListener('canplay', attemptPlay, { once: true });
+      }
+    },
+    // videoKey in deps ensures we get a fresh callback per mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [videoKey],
+  );
 
   function handlePlay() {
     const video = videoRef.current;
@@ -80,12 +111,25 @@ export function VideoPlayer({
   }
 
   function handleError() {
+    // Auto-retry a few times before surfacing the error to the user.
+    if (autoRetryCountRef.current < MAX_AUTO_RETRIES) {
+      autoRetryCountRef.current += 1;
+      console.warn(
+        `VideoPlayer: transient error, auto-retry ${autoRetryCountRef.current}/${MAX_AUTO_RETRIES}`,
+      );
+      setTimeout(() => {
+        setVideoKey((k) => k + 1);
+      }, RETRY_DELAY_MS);
+      return;
+    }
+
     setHasLoadError(true);
     onLoadError?.();
   }
 
   function handleEnded() {
     clearStallTimer();
+    autoRetryCountRef.current = 0; // reset retries on success
     completedPlayCountRef.current += 1;
     setCompletedPlayCount(completedPlayCountRef.current);
     onEnded?.(completedPlayCountRef.current);
@@ -115,35 +159,7 @@ export function VideoPlayer({
     setIsStalled(false);
   }
 
-  function restartVideo(video: HTMLVideoElement) {
-    countedCurrentPlayRef.current = false;
-    video.pause();
-
-    try {
-      video.currentTime = 0;
-    } catch (err) {
-      console.warn('VideoPlayer seek failed:', err);
-    }
-
-    video.load();
-  }
-
-  async function playVideo(video: HTMLVideoElement, label: string) {
-    try {
-      await video.play();
-    } catch (err) {
-      console.warn(`VideoPlayer ${label} failed:`, err);
-      setHasLoadError(true);
-      onLoadError?.();
-    }
-  }
-
   async function handleReplay() {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
     const isReplayAction = !hasLoadError && !isStalled && completedPlayCountRef.current >= 1;
     if (isReplayAction) {
       if (hasUsedReplayRef.current) {
@@ -157,12 +173,19 @@ export function VideoPlayer({
     setHasLoadError(false);
     setIsStalled(false);
     clearStallTimer();
-    startedPlayCountRef.current = 0;
-    setStartedPlayCount(0);
+    countedCurrentPlayRef.current = false;
+    autoRetryCountRef.current = 0;
 
-    restartVideo(video);
-    await playVideo(video, 'replay');
+    // Force a completely new <video> element via key change.
+    // This is the most reliable way to replay in Electron/Chromium —
+    // it avoids all issues with stale MediaSource state, cached error
+    // flags, and half-loaded buffers.
+    setVideoKey((k) => k + 1);
   }
+
+  // Cache-bust the src with the videoKey so the browser treats each
+  // attempt as a fresh resource (avoids cached error responses).
+  const effectiveSrc = videoKey === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}_t=${videoKey}`;
 
   const canReplay =
     !hasUsedReplay && (hasLoadError || isStalled || (completedPlayCount >= 1 && startedPlayCount < 2));
@@ -177,8 +200,9 @@ export function VideoPlayer({
   return (
     <div className="flex flex-col items-center gap-4">
       <video
-        ref={videoRef}
-        src={src}
+        key={videoKey}
+        ref={videoCallbackRef}
+        src={effectiveSrc}
         preload="auto"
         playsInline
         aria-label={title}
