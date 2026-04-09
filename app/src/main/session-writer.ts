@@ -11,7 +11,7 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { app } from 'electron';
 import archiver from 'archiver';
@@ -95,6 +95,7 @@ type SessionState = {
 
 let current: SessionState | null = null;
 let lastFinalizedDir: string | null = null;
+let lastFinalizedIntake: Intake | null = null;
 
 function resolveExportRoot(): string {
   const cfg = getCurrentConfig();
@@ -278,6 +279,7 @@ export function finalizeSession(): { exportDir: string } {
 
   const exportDir = current.sessionDir;
   lastFinalizedDir = exportDir;
+  lastFinalizedIntake = current.intake;
   current = null;
   return { exportDir };
 }
@@ -295,9 +297,14 @@ export function downloadSessionZip(): Promise<{ zipPath: string }> {
   if (!sourceDir) {
     throw new Error('downloadSessionZip: no session to export');
   }
-  const participantId = current?.participantId ?? sourceDir.split('/').pop() ?? 'unknown';
+  const participantId = current?.participantId ?? basename(sourceDir) ?? 'unknown';
+  const intake = current?.intake ?? lastFinalizedIntake;
+  const namePart = intake
+    ? `${intake.firstName}-${intake.lastName}`.replace(/[^a-zA-Z0-9-]/g, '')
+    : '';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const zipName = `HFE-results-${participantId}-${timestamp}.zip`;
+  const segments = ['HFE-results', namePart, participantId, timestamp].filter(Boolean);
+  const zipName = `${segments.join('_')}.zip`;
   const zipPath = join(app.getPath('downloads'), zipName);
 
   return new Promise((resolve, reject) => {

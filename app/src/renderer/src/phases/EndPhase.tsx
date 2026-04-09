@@ -7,11 +7,15 @@ type State =
   | { kind: 'ready'; exportDir: string }
   | { kind: 'error'; message: string };
 
-type DownloadState = 'idle' | 'downloading' | 'done' | 'error';
+type DownloadState =
+  | { kind: 'idle' }
+  | { kind: 'downloading' }
+  | { kind: 'done'; zipPath: string }
+  | { kind: 'error' };
 
 export function EndPhase() {
   const [state, setState] = useState<State>({ kind: 'finalizing' });
-  const [dlState, setDlState] = useState<DownloadState>('idle');
+  const [dlState, setDlState] = useState<DownloadState>({ kind: 'idle' });
 
   useEffect(() => {
     let cancelled = false;
@@ -34,13 +38,13 @@ export function EndPhase() {
   }, []);
 
   async function handleDownload() {
-    setDlState('downloading');
+    setDlState({ kind: 'downloading' });
     try {
-      await window.api.downloadSessionZip();
-      setDlState('done');
+      const { zipPath } = await window.api.downloadSessionZip();
+      setDlState({ kind: 'done', zipPath });
     } catch (err) {
       console.error('downloadSessionZip failed:', err);
-      setDlState('error');
+      setDlState({ kind: 'error' });
     }
   }
 
@@ -77,16 +81,19 @@ export function EndPhase() {
           <Button
             variant="primary"
             onClick={handleDownload}
-            disabled={state.kind !== 'ready' || dlState === 'downloading'}
+            disabled={state.kind !== 'ready' || dlState.kind === 'downloading'}
             className="self-start"
           >
-            {dlState === 'downloading'
+            {dlState.kind === 'downloading'
               ? 'Saving…'
-              : dlState === 'done'
+              : dlState.kind === 'done'
                 ? 'Saved to Downloads'
                 : 'Download results →'}
           </Button>
-          {dlState === 'error' && (
+          {dlState.kind === 'done' && (
+            <p className="break-all text-sm text-neutral-500">{dlState.zipPath}</p>
+          )}
+          {dlState.kind === 'error' && (
             <p className="text-sm text-red-600">Download failed. Please try again.</p>
           )}
           <Button onClick={handleQuit} className="self-start text-neutral-500">
