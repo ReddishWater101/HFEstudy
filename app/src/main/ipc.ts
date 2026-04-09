@@ -15,6 +15,7 @@ import {
 import {
   appendEvent,
   copySessionTo,
+  downloadSessionZip,
   finalizeSession,
   startSession,
   type Intake,
@@ -154,6 +155,9 @@ export function registerIpc(): void {
   });
   ipcMain.handle('copySessionTo', (_event, destDir: string) => {
     copySessionTo(destDir);
+  });
+  ipcMain.handle('downloadSessionZip', () => {
+    return downloadSessionZip();
   });
   ipcMain.handle('showExportDialog', async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);

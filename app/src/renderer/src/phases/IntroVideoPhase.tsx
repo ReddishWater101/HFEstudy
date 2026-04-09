@@ -126,7 +126,9 @@ function IntroPersonView({
   }
 
   const phraseLength = phrase.trim().length;
-  const phraseValid = !phraseRequired || phraseLength >= phraseMinChars;
+  const phraseLower = phrase.trim().toLowerCase();
+  const phraseContainsName = phraseRequired && person.firstName.length > 0 && phraseLower.includes(person.firstName.toLowerCase());
+  const phraseValid = !phraseRequired || (phraseLength >= phraseMinChars && !phraseContainsName);
   const requiredCompletedPlays = mandatorySecondVideoPlay ? 2 : 1;
   const replayRequirementMet = completedPlayCount >= requiredCompletedPlays;
   const canAdvance = firstPlayEnded && replayRequirementMet && phraseValid;
@@ -174,6 +176,9 @@ function IntroPersonView({
               placeholder={`Type a memory phrase (min ${phraseMinChars} chars)...`}
               autoFocus
             />
+            {phraseContainsName && (
+              <p className="text-sm text-red-600">Your phrase cannot contain the person's name</p>
+            )}
           </div>
         )}
 

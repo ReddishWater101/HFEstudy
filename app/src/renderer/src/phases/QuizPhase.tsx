@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Layout } from '../components/Layout';
+import { TimerBar } from '../components/TimerBar';
 import { Input } from '../components/ui/Input';
 import { isMatch } from '../lib/fuzzy';
 import { useDispatch, useSession } from '../state/SessionProvider';
@@ -126,10 +127,35 @@ function QuizQuestion({ person, timeLimitSec, fuzzyMaxEdits, onComplete }: QuizQ
     onComplete();
   }
 
+  function handleIdk() {
+    if (settledRef.current) return;
+    const now = performance.now();
+    settledRef.current = true;
+
+    const shownAt = cardShownAtRef.current ?? now;
+    const rtMs = now - shownAt;
+
+    void window.api.logEvent({
+      type: 'quiz.idk',
+      t: Date.now(),
+      personId: person.id,
+      rtMs,
+    });
+
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    onComplete();
+  }
+
+  // no-op: TimerBar is display-only; the real timeout is the setTimeout above
+  const noop = useRef(() => {}).current;
+
   return (
     <Layout>
       <div className="flex h-full flex-col items-center gap-12 py-16">
-        <div className="text-xs uppercase tracking-widest text-neutral-400">Recall</div>
+        <TimerBar durationSec={timeLimitSec} onComplete={noop} />
         <img
           src={person.imageUrl}
           alt=""
@@ -137,7 +163,7 @@ function QuizQuestion({ person, timeLimitSec, fuzzyMaxEdits, onComplete }: QuizQ
           className="h-64 w-64 object-cover"
           draggable={false}
         />
-        <div className="w-full max-w-sm">
+        <div className="flex w-full max-w-sm flex-col items-center gap-3">
           <Input
             type="text"
             value={typed}
@@ -147,6 +173,13 @@ function QuizQuestion({ person, timeLimitSec, fuzzyMaxEdits, onComplete }: QuizQ
             autoFocus
             autoComplete="off"
           />
+          <button
+            type="button"
+            onClick={handleIdk}
+            className="text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
+          >
+            I don&apos;t know
+          </button>
         </div>
       </div>
     </Layout>

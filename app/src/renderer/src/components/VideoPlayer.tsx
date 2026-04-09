@@ -26,10 +26,12 @@ export function VideoPlayer({
   const completedPlayCountRef = useRef(0);
   const countedCurrentPlayRef = useRef(false);
   const stallTimerRef = useRef<number | null>(null);
+  const hasUsedReplayRef = useRef(false);
   const [startedPlayCount, setStartedPlayCount] = useState(0);
   const [completedPlayCount, setCompletedPlayCount] = useState(0);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [isStalled, setIsStalled] = useState(false);
+  const [hasUsedReplay, setHasUsedReplay] = useState(false);
 
   function clearStallTimer() {
     if (stallTimerRef.current !== null) {
@@ -44,10 +46,12 @@ export function VideoPlayer({
     startedPlayCountRef.current = 0;
     completedPlayCountRef.current = 0;
     countedCurrentPlayRef.current = false;
+    hasUsedReplayRef.current = false;
     setStartedPlayCount(0);
     setCompletedPlayCount(0);
     setHasLoadError(false);
     setIsStalled(false);
+    setHasUsedReplay(false);
     clearStallTimer();
 
     if (!video) {
@@ -140,6 +144,16 @@ export function VideoPlayer({
       return;
     }
 
+    const isReplayAction = !hasLoadError && !isStalled && completedPlayCountRef.current >= 1;
+    if (isReplayAction) {
+      if (hasUsedReplayRef.current) {
+        return;
+      }
+
+      hasUsedReplayRef.current = true;
+      setHasUsedReplay(true);
+    }
+
     setHasLoadError(false);
     setIsStalled(false);
     clearStallTimer();
@@ -151,7 +165,7 @@ export function VideoPlayer({
   }
 
   const canReplay =
-    hasLoadError || isStalled || (completedPlayCount >= 1 && startedPlayCount < 2);
+    !hasUsedReplay && (hasLoadError || isStalled || (completedPlayCount >= 1 && startedPlayCount < 2));
   const inRecoveryState = hasLoadError || isStalled;
   const buttonLabel = inRecoveryState ? 'Retry' : 'Replay from start';
   const recoveryMessage = hasLoadError

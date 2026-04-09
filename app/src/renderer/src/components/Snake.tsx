@@ -129,10 +129,10 @@ export function Snake({ onScore, onGameOver }: SnakeProps) {
 
     function handleKey(e: KeyboardEvent) {
       const s = stateRef.current;
-      if (e.key === 'ArrowUp') s.pendingDir = { x: 0, y: -1 };
-      else if (e.key === 'ArrowDown') s.pendingDir = { x: 0, y: 1 };
-      else if (e.key === 'ArrowLeft') s.pendingDir = { x: -1, y: 0 };
-      else if (e.key === 'ArrowRight') s.pendingDir = { x: 1, y: 0 };
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') s.pendingDir = { x: 0, y: -1 };
+      else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') s.pendingDir = { x: 0, y: 1 };
+      else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') s.pendingDir = { x: -1, y: 0 };
+      else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') s.pendingDir = { x: 1, y: 0 };
     }
 
     window.addEventListener('keydown', handleKey);

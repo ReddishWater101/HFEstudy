@@ -39,8 +39,9 @@ export function SnakePhase() {
         <div className="flex items-center justify-end">
           <TimerBar durationSec={durationSec} onComplete={handleTimerComplete} />
         </div>
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-3">
           <Snake onGameOver={handleGameOver} />
+          <p className="text-xs text-neutral-400">Use arrow keys or WASD to control</p>
         </div>
       </div>
     </Layout>

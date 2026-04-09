@@ -207,18 +207,7 @@ function StudyFileField({
         </Button>
 
         {state.kind === 'loaded' ? (
-          <div className="flex flex-col gap-1 text-sm text-neutral-500">
-            <span className="text-neutral-900">{basename(state.filePath)}</span>
-            <span>
-              {state.resolvedPeople.length}{' '}
-              {state.resolvedPeople.length === 1 ? 'person' : 'people'} ·{' '}
-              {state.config.enabledModes.length}{' '}
-              {state.config.enabledModes.length === 1 ? 'mode' : 'modes'} ·{' '}
-              {state.config.flashcardBlockCount}{' '}
-              {state.config.flashcardBlockCount === 1 ? 'block' : 'blocks'}
-              {state.config.snakeEnabled ? ' · snake on' : ' · snake off'}
-            </span>
-          </div>
+          <div className="text-sm text-neutral-900">{basename(state.filePath)}</div>
         ) : null}
 
         {state.kind === 'error' ? (

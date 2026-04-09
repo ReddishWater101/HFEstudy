@@ -88,6 +88,7 @@ declare global {
         editDistance: number;
         rtMs: number;
       }
+    | { type: 'quiz.idk'; t: number; personId: string; rtMs: number }
     | { type: 'quiz.timeout'; t: number; personId: string }
     | { type: 'session.finalize'; t: number };
 
@@ -113,6 +114,7 @@ declare global {
     finalizeSession: () => Promise<{ exportDir: string }>;
     copySessionTo: (destDir: string) => Promise<void>;
     showExportDialog: () => Promise<string | null>;
+    downloadSessionZip: () => Promise<{ zipPath: string }>;
     quit: () => Promise<void>;
   };
 

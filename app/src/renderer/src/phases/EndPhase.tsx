@@ -7,8 +7,11 @@ type State =
   | { kind: 'ready'; exportDir: string }
   | { kind: 'error'; message: string };
 
+type DownloadState = 'idle' | 'downloading' | 'done' | 'error';
+
 export function EndPhase() {
   const [state, setState] = useState<State>({ kind: 'finalizing' });
+  const [dlState, setDlState] = useState<DownloadState>('idle');
 
   useEffect(() => {
     let cancelled = false;
@@ -31,12 +34,13 @@ export function EndPhase() {
   }, []);
 
   async function handleDownload() {
-    const dest = await window.api.showExportDialog();
-    if (!dest) return;
+    setDlState('downloading');
     try {
-      await window.api.copySessionTo(dest);
+      await window.api.downloadSessionZip();
+      setDlState('done');
     } catch (err) {
-      console.error('copySessionTo failed:', err);
+      console.error('downloadSessionZip failed:', err);
+      setDlState('error');
     }
   }
 
@@ -73,11 +77,18 @@ export function EndPhase() {
           <Button
             variant="primary"
             onClick={handleDownload}
-            disabled={state.kind !== 'ready'}
+            disabled={state.kind !== 'ready' || dlState === 'downloading'}
             className="self-start"
           >
-            Download results →
+            {dlState === 'downloading'
+              ? 'Saving…'
+              : dlState === 'done'
+                ? 'Saved to Downloads'
+                : 'Download results →'}
           </Button>
+          {dlState === 'error' && (
+            <p className="text-sm text-red-600">Download failed. Please try again.</p>
+          )}
           <Button onClick={handleQuit} className="self-start text-neutral-500">
             Quit
           </Button>

@@ -15,6 +15,7 @@ const api: Api = {
   finalizeSession: () => ipcRenderer.invoke('finalizeSession'),
   copySessionTo: (destDir) => ipcRenderer.invoke('copySessionTo', destDir),
   showExportDialog: () => ipcRenderer.invoke('showExportDialog'),
+  downloadSessionZip: () => ipcRenderer.invoke('downloadSessionZip'),
   quit: () => ipcRenderer.invoke('quit'),
 };
 

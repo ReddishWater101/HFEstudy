@@ -1,9 +1,12 @@
 import {
   closeSync,
   cpSync,
+  createReadStream,
+  createWriteStream,
   fsyncSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
   writeSync,
@@ -11,8 +14,19 @@ import {
 import { isAbsolute, join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { app } from 'electron';
+import archiver from 'archiver';
 import { getCurrentConfig } from './config';
 import { writeCsv } from './csv';
+
+function fmtTimestamp(epochMs: number): string {
+  const d = new Date(epochMs);
+  const date = d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const time = d.toLocaleTimeString('en-GB', { hour12: false }); // HH:MM:SS
+  const tz = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' })
+    .formatToParts(d)
+    .find((p) => p.type === 'timeZoneName')?.value ?? '';
+  return `${date} ${time} ${tz}`.trim();
+}
 
 type Mode = 1 | 2 | 3 | 4;
 
@@ -67,6 +81,7 @@ export type SessionEvent =
       editDistance: number;
       rtMs: number;
     }
+  | { type: 'quiz.idk'; t: number; personId: string; rtMs: number }
   | { type: 'quiz.timeout'; t: number; personId: string }
   | { type: 'session.finalize'; t: number };
 
@@ -146,9 +161,20 @@ function buildRecallRows(
         typedName: ev.typed,
         correct: ev.correct,
         editDistance: ev.editDistance,
-        rtMs: ev.rtMs,
+        rtSec: +(ev.rtMs / 1000).toFixed(2),
         mode: modeAssignment[ev.personId] ?? '',
-        sessionTimestamp: ev.t,
+        timestamp: fmtTimestamp(ev.t),
+      });
+    } else if (ev.type === 'quiz.idk') {
+      rows.push({
+        personId: ev.personId,
+        trueName: trueNameByPerson.get(ev.personId) ?? '',
+        typedName: 'IDK',
+        correct: false,
+        editDistance: '',
+        rtSec: +(ev.rtMs / 1000).toFixed(2),
+        mode: modeAssignment[ev.personId] ?? '',
+        timestamp: fmtTimestamp(ev.t),
       });
     } else if (ev.type === 'quiz.timeout') {
       rows.push({
@@ -157,9 +183,9 @@ function buildRecallRows(
         typedName: '',
         correct: false,
         editDistance: '',
-        rtMs: '',
+        rtSec: '',
         mode: modeAssignment[ev.personId] ?? '',
-        sessionTimestamp: ev.t,
+        timestamp: fmtTimestamp(ev.t),
       });
     }
   }
@@ -176,11 +202,11 @@ function buildStudyLogRows(events: SessionEvent[]): Record<string, unknown>[] {
       const show = pendingShow.get(ev.personId);
       if (show) {
         rows.push({
-          timestamp: show.t,
+          timestamp: fmtTimestamp(show.t),
           personId: show.personId,
           mode: show.mode,
           blockLabel: show.blockLabel,
-          durationMs: ev.durationMs,
+          durationSec: +(ev.durationMs / 1000).toFixed(2),
           bucket: ev.bucket,
         });
         pendingShow.delete(ev.personId);
@@ -262,4 +288,32 @@ export function copySessionTo(destDir: string): void {
     throw new Error('copySessionTo: no session to copy');
   }
   cpSync(sourceDir, destDir, { recursive: true });
+}
+
+export function downloadSessionZip(): Promise<{ zipPath: string }> {
+  const sourceDir = current?.sessionDir ?? lastFinalizedDir;
+  if (!sourceDir) {
+    throw new Error('downloadSessionZip: no session to export');
+  }
+  const participantId = current?.participantId ?? sourceDir.split('/').pop() ?? 'unknown';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const zipName = `HFE-results-${participantId}-${timestamp}.zip`;
+  const zipPath = join(app.getPath('downloads'), zipName);
+
+  return new Promise((resolve, reject) => {
+    const output = createWriteStream(zipPath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => resolve({ zipPath }));
+    archive.on('error', (err) => reject(err));
+
+    archive.pipe(output);
+
+    const files = readdirSync(sourceDir);
+    for (const file of files) {
+      archive.append(createReadStream(join(sourceDir, file)), { name: file });
+    }
+
+    void archive.finalize();
+  });
 }
