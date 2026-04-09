@@ -130,11 +130,9 @@ function IntroPersonView({
   const phraseContainsName = phraseRequired && person.firstName.length > 0 && phraseLower.includes(person.firstName.toLowerCase());
   const phraseValid = !phraseRequired || (phraseLength >= phraseMinChars && !phraseContainsName);
   const requiredCompletedPlays = mandatorySecondVideoPlay ? 2 : 1;
-  const replayRequirementMet = completedPlayCount >= requiredCompletedPlays;
-  const canAdvance = firstPlayEnded && replayRequirementMet && phraseValid;
+  const allPlaysCompleted = completedPlayCount >= requiredCompletedPlays;
+  const canAdvance = firstPlayEnded && allPlaysCompleted && phraseValid;
   const showPhraseInput = phraseRequired && firstPlayEnded;
-
-  const showReplayHint = firstPlayEnded && !replayRequirementMet;
 
   return (
     <Layout>
@@ -150,6 +148,7 @@ function IntroPersonView({
         <VideoPlayer
           src={person.videoUrl}
           title={`${person.firstName} introduction video`}
+          autoReplay={mandatorySecondVideoPlay}
           onPlayCountChange={handlePlayCountChange}
           onEnded={handleEnded}
           onLoadError={() => {
@@ -183,9 +182,6 @@ function IntroPersonView({
         )}
 
         <div className="flex flex-col items-end gap-2">
-          {showReplayHint && (
-            <div className="text-sm text-neutral-500">Replay once to continue.</div>
-          )}
           <Button
             variant="primary"
             onClick={handleNext}

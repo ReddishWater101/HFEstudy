@@ -9,6 +9,7 @@ const RETRY_DELAY_MS = 300;
 export type VideoPlayerProps = {
   src: string;
   title: string;
+  autoReplay?: boolean;
   onPlayCountChange?: (count: number) => void;
   onEnded?: (count: number) => void;
   onLoadError?: () => void;
@@ -16,14 +17,17 @@ export type VideoPlayerProps = {
 };
 
 /**
- * Robust video player that supports replay and automatic retry on transient
- * errors.  Uses a React `key` to force a fresh <video> element when the src
- * changes OR when a retry/replay is needed, which avoids stale-state bugs
- * that occur when reusing a single element across plays.
+ * Robust video player with automatic retry on transient errors.
+ * Uses a React `key` to force a fresh <video> element when the src
+ * changes or when a retry is needed, avoiding stale-state bugs.
+ *
+ * When `autoReplay` is true the video automatically plays a second time
+ * after the first play completes (no user interaction required).
  */
 export function VideoPlayer({
   src,
   title,
+  autoReplay = false,
   onPlayCountChange,
   onEnded,
   onLoadError,
@@ -35,14 +39,10 @@ export function VideoPlayer({
   const countedCurrentPlayRef = useRef(false);
   const stallTimerRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
-  const hasUsedReplayRef = useRef(false);
   const autoRetryCountRef = useRef(0);
 
-  const [startedPlayCount, setStartedPlayCount] = useState(0);
-  const [completedPlayCount, setCompletedPlayCount] = useState(0);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [isStalled, setIsStalled] = useState(false);
-  const [hasUsedReplay, setHasUsedReplay] = useState(false);
   // Incrementing videoKey forces React to mount a brand-new <video> element.
   const [videoKey, setVideoKey] = useState(0);
 
@@ -65,13 +65,9 @@ export function VideoPlayer({
     startedPlayCountRef.current = 0;
     completedPlayCountRef.current = 0;
     countedCurrentPlayRef.current = false;
-    hasUsedReplayRef.current = false;
     autoRetryCountRef.current = 0;
-    setStartedPlayCount(0);
-    setCompletedPlayCount(0);
     setHasLoadError(false);
     setIsStalled(false);
-    setHasUsedReplay(false);
     clearStallTimer();
     clearRetryTimer();
     // Force a fresh video element for the new src.
@@ -113,7 +109,6 @@ export function VideoPlayer({
     if (video && !countedCurrentPlayRef.current && video.currentTime <= START_THRESHOLD_SECONDS) {
       startedPlayCountRef.current += 1;
       countedCurrentPlayRef.current = true;
-      setStartedPlayCount(startedPlayCountRef.current);
       onPlayCountChange?.(startedPlayCountRef.current);
     }
 
@@ -140,10 +135,15 @@ export function VideoPlayer({
 
   function handleEnded() {
     clearStallTimer();
-    autoRetryCountRef.current = 0; // reset retries on success
+    autoRetryCountRef.current = 0;
     completedPlayCountRef.current += 1;
-    setCompletedPlayCount(completedPlayCountRef.current);
+    countedCurrentPlayRef.current = false;
     onEnded?.(completedPlayCountRef.current);
+
+    // Auto-replay once after the first completed play.
+    if (autoReplay && completedPlayCountRef.current === 1) {
+      setVideoKey((k) => k + 1);
+    }
   }
 
   function startStallTimer() {
@@ -170,28 +170,12 @@ export function VideoPlayer({
     setIsStalled(false);
   }
 
-  async function handleReplay() {
-    const isReplayAction = !hasLoadError && !isStalled && completedPlayCountRef.current >= 1;
-    if (isReplayAction) {
-      if (hasUsedReplayRef.current) {
-        return;
-      }
-
-      hasUsedReplayRef.current = true;
-      setHasUsedReplay(true);
-    }
-
+  function handleRetry() {
     setHasLoadError(false);
     setIsStalled(false);
     clearStallTimer();
     clearRetryTimer();
-    countedCurrentPlayRef.current = false;
     autoRetryCountRef.current = 0;
-
-    // Force a completely new <video> element via key change.
-    // This is the most reliable way to replay in Electron/Chromium —
-    // it avoids all issues with stale MediaSource state, cached error
-    // flags, and half-loaded buffers.
     setVideoKey((k) => k + 1);
   }
 
@@ -199,10 +183,7 @@ export function VideoPlayer({
   // attempt as a fresh resource (avoids cached error responses).
   const effectiveSrc = videoKey === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}_t=${videoKey}`;
 
-  const canReplay =
-    !hasUsedReplay && (hasLoadError || isStalled || (completedPlayCount >= 1 && startedPlayCount < 2));
-  const inRecoveryState = hasLoadError || isStalled;
-  const buttonLabel = inRecoveryState ? 'Retry' : 'Replay from start';
+  const canRetry = hasLoadError || isStalled;
   const recoveryMessage = hasLoadError
     ? 'Video failed to load.'
     : isStalled
@@ -229,16 +210,15 @@ export function VideoPlayer({
 
       {recoveryMessage && <div className="text-sm text-neutral-500">{recoveryMessage}</div>}
 
-      <div className="flex items-center gap-6 text-sm text-neutral-500">
+      {canRetry && (
         <Button
-          onClick={handleReplay}
+          onClick={handleRetry}
           type="button"
-          disabled={!canReplay}
-          className="hover:text-neutral-900"
+          className="text-sm text-neutral-500 hover:text-neutral-900"
         >
-          {buttonLabel}
+          Retry
         </Button>
-      </div>
+      )}
     </div>
   );
 }
