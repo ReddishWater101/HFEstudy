@@ -187,7 +187,7 @@ async function getConfig(): Promise<AppConfig> {
     recallTimePerFaceSec: 15,
     phraseMinChars: 8,
     fuzzyMatchMaxEdits: 2,
-    mandatorySecondVideoPlay: true,
+    mandatorySecondVideoPlay: false,
     assetsPath: './People',
     exportPath: './exports',
   };
