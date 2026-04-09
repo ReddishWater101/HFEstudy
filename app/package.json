@@ -1,6 +1,6 @@
 {
   "name": "hfestudy",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "HFE Study desktop app",
   "private": true,
   "main": "./out/main/index.js",
@@ -18,7 +18,8 @@
     "package": "electron-vite build && electron-builder",
     "package:mac": "electron-vite build && electron-builder --mac",
     "package:win": "electron-vite build && electron-builder --win",
-    "package:all": "electron-vite build && electron-builder -mw"
+    "package:all": "electron-vite build && electron-builder -mw",
+    "release": "node scripts/release.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",

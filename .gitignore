@@ -9,3 +9,4 @@ exports/
 .env.local
 .vscode/
 .idea/
+build/*.exe
