@@ -23,5 +23,5 @@ module.exports = {
       { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
     ],
   },
-  ignorePatterns: ['out/', 'release/', 'node_modules/', 'dist/', 'build/'],
+  ignorePatterns: ['out/', 'release/', 'node_modules/', 'dist/', 'build/', 'scripts/'],
 };

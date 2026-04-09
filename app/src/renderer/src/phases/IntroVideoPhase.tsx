@@ -177,7 +177,7 @@ function IntroPersonView({
               autoFocus
             />
             {phraseContainsName && (
-              <p className="text-sm text-red-600">Your phrase cannot contain the person's name</p>
+              <p className="text-sm text-red-600">Your phrase cannot contain the person&apos;s name</p>
             )}
           </div>
         )}
