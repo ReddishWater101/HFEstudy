@@ -14,18 +14,20 @@ function shuffle<T>(items: T[]): T[] {
   return arr;
 }
 
-export function FlashcardPhase({ sessionLabel }: { sessionLabel: 'A' | 'B' }) {
-  const { people, modeAssignment } = useSession();
+export function FlashcardPhase({ blockIndex }: { blockIndex: number }) {
+  const { people, modeAssignment, studyConfig } = useSession();
   const dispatch = useDispatch();
+
+  if (!studyConfig) {
+    throw new Error('FlashcardPhase rendered without studyConfig');
+  }
+
+  const blockLabel = String(blockIndex + 1);
+  const durationSec = studyConfig.flashcardBlockDurationSec;
 
   const [deck, setDeck] = useState<Person[]>(() => shuffle(people));
   const [currentIndex, setCurrentIndex] = useState(0);
   const cardShownAtRef = useRef(performance.now());
-
-  const [durationSec, setDurationSec] = useState(420);
-  useEffect(() => {
-    void window.api.getConfig().then((cfg) => setDurationSec(cfg.flashcardSessionDurationSec));
-  }, []);
 
   const currentPerson = deck[currentIndex];
 
@@ -40,9 +42,9 @@ export function FlashcardPhase({ sessionLabel }: { sessionLabel: 'A' | 'B' }) {
       t: Date.now(),
       personId: currentPerson.id,
       mode,
-      sessionLabel,
+      blockLabel,
     });
-  }, [currentPerson, modeAssignment, sessionLabel]);
+  }, [currentPerson, modeAssignment, blockLabel]);
 
   function handleBucket(bucket: Bucket) {
     if (!currentPerson) return;
@@ -60,7 +62,7 @@ export function FlashcardPhase({ sessionLabel }: { sessionLabel: 'A' | 'B' }) {
       void window.api.logEvent({
         type: 'flashcard.refill',
         t: Date.now(),
-        sessionLabel,
+        blockLabel,
       });
       setDeck(shuffle(people));
       setCurrentIndex(0);
@@ -82,7 +84,7 @@ export function FlashcardPhase({ sessionLabel }: { sessionLabel: 'A' | 'B' }) {
       <div className="flex h-full flex-col gap-16 py-16">
         <div className="flex items-center justify-between">
           <div className="text-xs uppercase tracking-widest text-neutral-400">
-            Session {sessionLabel}
+            Block {blockLabel}
           </div>
           <TimerBar durationSec={durationSec} onComplete={handleTimerComplete} />
         </div>

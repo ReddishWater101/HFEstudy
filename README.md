@@ -118,12 +118,10 @@ Knobs live in `config.json` inside the user-data directory:
 
 The first launch copies `config.default.json` from the bundled resources. Edit `config.json` directly between sessions; the app reads it on launch.
 
+People selection, flashcard block count/duration, and snake duration are no longer in `config.json` — they now come from the study JSON file the participant uploads on the welcome screen (built via the proctor's Experiment Builder).
+
 | Key | What it does |
 |---|---|
-| `numberOfPeople` | How many of the available people are sampled per session (default 16) |
-| `numFlashcardSessions` | Number of flashcard blocks (currently 2: A and B) |
-| `flashcardSessionDurationSec` | Duration of each flashcard block (default 420 = 7 min) |
-| `snakeDurationSec` | Snake filler duration (default 120 = 2 min) |
 | `recallTimePerFaceSec` | Hard cap per face on the recall test (default 15) |
 | `phraseMinChars` | Minimum length of memory phrase before Next is enabled (default 8) |
 | `fuzzyMatchMaxEdits` | Levenshtein distance allowed when grading recall (default 2) |

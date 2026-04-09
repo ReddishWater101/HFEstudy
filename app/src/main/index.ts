@@ -1,10 +1,19 @@
 import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import { join } from 'node:path';
+import { scanPeople } from './assets';
 import { loadConfig } from './config';
+import { loadOrInitRegistry } from './peopleRegistry';
 import { registerAppProtocolHandler, registerSchemes } from './protocol';
 import { registerIpc } from './ipc';
 
 const isDev = !app.isPackaged;
+
+// Enforce single instance — prevents registry race conditions when two
+// copies of the app start simultaneously.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+}
 
 registerSchemes();
 
@@ -90,10 +99,31 @@ app.whenReady().then(async () => {
     return;
   }
 
+  try {
+    const scanned = await scanPeople();
+    await loadOrInitRegistry(scanned);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    dialog.showErrorBox(
+      'People registry error',
+      `Failed to load people.json:\n\n${message}\n\nThe app will now quit.`,
+    );
+    app.quit();
+    return;
+  }
+
   applyCspHeaders();
   registerAppProtocolHandler();
   registerIpc();
   createMainWindow();
+
+  app.on('second-instance', () => {
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+      if (windows[0].isMinimized()) windows[0].restore();
+      windows[0].focus();
+    }
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -1,23 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Snake } from '../components/Snake';
 import { TimerBar } from '../components/TimerBar';
-import { useDispatch } from '../state/SessionProvider';
+import { useDispatch, useSession } from '../state/SessionProvider';
 
 export function SnakePhase() {
   const dispatch = useDispatch();
-  const [durationSec, setDurationSec] = useState(120);
+  const { studyConfig, phase } = useSession();
+
+  if (!studyConfig) {
+    throw new Error('SnakePhase rendered without studyConfig');
+  }
+  if (phase.kind !== 'snake') {
+    throw new Error('SnakePhase rendered outside of snake phase');
+  }
+
+  const durationSec = studyConfig.snakeDurationSec;
+  const afterBlockIndex = phase.afterBlockIndex;
 
   useEffect(() => {
-    void window.api.getConfig().then((cfg) => setDurationSec(cfg.snakeDurationSec));
-  }, []);
-
-  useEffect(() => {
-    void window.api.logEvent({ type: 'snake.start', t: Date.now() });
+    void window.api.logEvent({ type: 'snake.start', t: Date.now(), afterBlockIndex });
     return () => {
-      void window.api.logEvent({ type: 'snake.end', t: Date.now() });
+      void window.api.logEvent({ type: 'snake.end', t: Date.now(), afterBlockIndex });
     };
-  }, []);
+  }, [afterBlockIndex]);
 
   function handleGameOver(finalScore: number) {
     void window.api.logEvent({ type: 'snake.gameover', t: Date.now(), score: finalScore });

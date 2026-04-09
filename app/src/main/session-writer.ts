@@ -25,6 +25,9 @@ type SessionStartEvent = {
   intake: Intake;
   modeAssignment: Record<string, Mode>;
   people: { id: string; firstName: string }[];
+  studyConfigId: string;
+  blockCount: number;
+  enabledModes: Mode[];
 };
 
 type FlashcardShowEvent = {
@@ -32,12 +35,14 @@ type FlashcardShowEvent = {
   t: number;
   personId: string;
   mode: Mode;
-  sessionLabel: 'A' | 'B';
+  blockLabel: string;
 };
 
 export type SessionEvent =
   | SessionStartEvent
   | { type: 'intro.video.play'; t: number; personId: string; playCount: number }
+  | { type: 'intro.video.error'; t: number; personId: string }
+  | { type: 'intro.video.stall'; t: number; personId: string }
   | { type: 'intro.phrase.input'; t: number; personId: string; phrase: string }
   | { type: 'intro.advance'; t: number; personId: string }
   | FlashcardShowEvent
@@ -48,10 +53,10 @@ export type SessionEvent =
       bucket: 'still-learning' | 'know-it';
       durationMs: number;
     }
-  | { type: 'flashcard.refill'; t: number; sessionLabel: 'A' | 'B' }
-  | { type: 'snake.start'; t: number }
+  | { type: 'flashcard.refill'; t: number; blockLabel: string }
+  | { type: 'snake.start'; t: number; afterBlockIndex: number }
   | { type: 'snake.gameover'; t: number; score: number }
-  | { type: 'snake.end'; t: number }
+  | { type: 'snake.end'; t: number; afterBlockIndex: number }
   | { type: 'quiz.show'; t: number; personId: string; trueName: string }
   | {
       type: 'quiz.answer';
@@ -174,7 +179,7 @@ function buildStudyLogRows(events: SessionEvent[]): Record<string, unknown>[] {
           timestamp: show.t,
           personId: show.personId,
           mode: show.mode,
-          sessionLabel: show.sessionLabel,
+          blockLabel: show.blockLabel,
           durationMs: ev.durationMs,
           bucket: ev.bucket,
         });
@@ -213,6 +218,10 @@ function buildMemoryPhraseRows(
 
 export function finalizeSession(): { exportDir: string } {
   if (!current) {
+    // Already finalized (e.g. React StrictMode double-mount) — return cached result.
+    if (lastFinalizedDir) {
+      return { exportDir: lastFinalizedDir };
+    }
     throw new Error('finalizeSession called before startSession');
   }
   appendEvent({ type: 'session.finalize', t: Date.now() });

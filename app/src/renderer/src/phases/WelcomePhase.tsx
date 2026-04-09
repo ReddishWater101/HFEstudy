@@ -5,9 +5,22 @@ import { useDispatch } from '../state/SessionProvider';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Label } from '../components/ui/Label';
+import { Gear } from '../components/ui/Gear';
 import { Layout } from '../components/Layout';
+import { ProctorPasswordModal } from '../components/ProctorPasswordModal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type StudyFileState =
+  | { kind: 'none' }
+  | { kind: 'loaded'; filePath: string; config: StudyConfig; resolvedPeople: Person[] }
+  | { kind: 'error'; message: string };
+
+function basename(p: string): string {
+  // Cross-platform basename so we don't drag in `path` on the renderer.
+  const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+  return idx >= 0 ? p.slice(idx + 1) : p;
+}
 
 export function WelcomePhase() {
   const dispatch = useDispatch();
@@ -15,16 +28,46 @@ export function WelcomePhase() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [studyFile, setStudyFile] = useState<StudyFileState>({ kind: 'none' });
+  const [studyFileLoading, setStudyFileLoading] = useState(false);
+  const [proctorOpen, setProctorOpen] = useState(false);
 
   const valid =
     firstName.trim().length > 0 &&
     lastName.trim().length > 0 &&
-    EMAIL_RE.test(email.trim());
+    EMAIL_RE.test(email.trim()) &&
+    studyFile.kind === 'loaded';
+
+  async function handleLoadStudyFile() {
+    setStudyFileLoading(true);
+    try {
+      const result = await window.api.showStudyFileOpenDialog();
+      if (!result) {
+        // User cancelled — leave existing state untouched.
+        return;
+      }
+      setStudyFile({
+        kind: 'loaded',
+        filePath: result.filePath,
+        config: result.config,
+        resolvedPeople: result.resolvedPeople,
+      });
+    } catch (err) {
+      // Only show error if no valid file was previously loaded.
+      if (studyFile.kind !== 'loaded') {
+        setStudyFile({
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    } finally {
+      setStudyFileLoading(false);
+    }
+  }
 
   async function handleBegin() {
-    if (!valid || submitting) return;
+    if (!valid || submitting || studyFile.kind !== 'loaded') return;
     setSubmitting(true);
-
     audio.init();
 
     const intake: IntakeData = {
@@ -32,16 +75,11 @@ export function WelcomePhase() {
       lastName: lastName.trim(),
       email: email.trim(),
     };
+    const selectedPeople = studyFile.resolvedPeople;
+    const modeAssignment = assignModes(selectedPeople, studyFile.config.enabledModes);
 
     try {
-      const allPeople = await window.api.getPeople();
-      const config = await window.api.getConfig();
-      const modeAssignment = assignModes(allPeople, config.numberOfPeople);
-
-      const selectedPeople = allPeople.filter((p) => modeAssignment[p.id] !== undefined);
-
       const { participantId } = await window.api.startSession(intake);
-
       await window.api.logEvent({
         type: 'session.start',
         t: Date.now(),
@@ -49,12 +87,16 @@ export function WelcomePhase() {
         intake,
         modeAssignment,
         people: selectedPeople.map((p) => ({ id: p.id, firstName: p.firstName })),
+        studyConfigId: studyFile.config.id,
+        blockCount: studyFile.config.flashcardBlockCount,
+        enabledModes: studyFile.config.enabledModes,
       });
 
       void audio.preload(selectedPeople.map((p) => p.audioUrl));
 
       dispatch({ type: 'setPeople', people: selectedPeople });
       dispatch({ type: 'setModeAssignment', modeAssignment });
+      dispatch({ type: 'setStudyConfig', studyConfig: studyFile.config });
       dispatch({ type: 'startSession', participantId, intake });
       dispatch({ type: 'advancePhase' });
     } catch (err) {
@@ -64,62 +106,127 @@ export function WelcomePhase() {
   }
 
   return (
-    <Layout>
-      <div className="flex flex-col gap-16 py-24">
-        <div className="flex flex-col gap-3">
-          <h1 className="font-display text-5xl leading-none text-neutral-900">
-            HFE Name Recall Study
-          </h1>
-          <p className="text-sm text-neutral-500">
-            A short session on how we remember faces and names.
-          </p>
+    <>
+      {/* Gear sits outside the centered column so it pins to the window corner. */}
+      <button
+        type="button"
+        onClick={() => setProctorOpen(true)}
+        aria-label="Proctor settings"
+        className="fixed right-6 top-6 z-10 flex h-10 w-10 items-center justify-center text-neutral-300 transition-colors hover:text-neutral-900"
+      >
+        <Gear />
+      </button>
+
+      <Layout>
+        <div className="flex flex-col gap-16 py-24">
+          <div className="flex flex-col gap-3">
+            <h1 className="font-display text-5xl leading-none text-neutral-900">
+              HFE Name Recall Study
+            </h1>
+            <p className="text-sm text-neutral-500">
+              A short session on how we remember faces and names.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="firstName">First name</Label>
+              <Input
+                id="firstName"
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="lastName">Last name</Label>
+              <Input
+                id="lastName"
+                type="text"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <StudyFileField state={studyFile} loading={studyFileLoading} onLoad={handleLoadStudyFile} />
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={handleBegin}
+            disabled={!valid || submitting}
+            className="self-start"
+          >
+            {submitting ? 'Starting…' : 'Begin study →'}
+          </Button>
         </div>
+      </Layout>
 
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="firstName">First name</Label>
-            <Input
-              id="firstName"
-              type="text"
-              autoComplete="given-name"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              autoFocus
-            />
-          </div>
+      <ProctorPasswordModal
+        open={proctorOpen}
+        onCancel={() => setProctorOpen(false)}
+        onSuccess={() => {
+          setProctorOpen(false);
+          dispatch({ type: 'setPhase', phase: { kind: 'proctor-builder' } });
+        }}
+      />
+    </>
+  );
+}
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="lastName">Last name</Label>
-            <Input
-              id="lastName"
-              type="text"
-              autoComplete="family-name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <Button
-          variant="primary"
-          onClick={handleBegin}
-          disabled={!valid || submitting}
-          className="self-start"
-        >
-          {submitting ? 'Starting…' : 'Begin study →'}
+function StudyFileField({
+  state,
+  loading,
+  onLoad,
+}: {
+  state: StudyFileState;
+  loading: boolean;
+  onLoad: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Study file</Label>
+      <div className="flex flex-col gap-2 pt-1">
+        <Button variant="default" onClick={onLoad} className="self-start py-1 text-sm">
+          {loading ? 'Loading…' : 'Load study file →'}
         </Button>
+
+        {state.kind === 'loaded' ? (
+          <div className="flex flex-col gap-1 text-sm text-neutral-500">
+            <span className="text-neutral-900">{basename(state.filePath)}</span>
+            <span>
+              {state.resolvedPeople.length}{' '}
+              {state.resolvedPeople.length === 1 ? 'person' : 'people'} ·{' '}
+              {state.config.enabledModes.length}{' '}
+              {state.config.enabledModes.length === 1 ? 'mode' : 'modes'} ·{' '}
+              {state.config.flashcardBlockCount}{' '}
+              {state.config.flashcardBlockCount === 1 ? 'block' : 'blocks'}
+              {state.config.snakeEnabled ? ' · snake on' : ' · snake off'}
+            </span>
+          </div>
+        ) : null}
+
+        {state.kind === 'error' ? (
+          <p className="text-sm text-red-600" role="alert">
+            {state.message}
+          </p>
+        ) : null}
       </div>
-    </Layout>
+    </div>
   );
 }

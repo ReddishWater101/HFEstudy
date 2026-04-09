@@ -7,10 +7,9 @@ declare global {
     audioUrl: string;
   };
 
+  type PersonWithUuid = Person & { uuid: string };
+
   type AppConfig = {
-    numberOfPeople: number;
-    flashcardSessionDurationSec: number;
-    snakeDurationSec: number;
     recallTimePerFaceSec: number;
     phraseMinChars: number;
     fuzzyMatchMaxEdits: number;
@@ -20,6 +19,27 @@ declare global {
   };
 
   type Mode = 1 | 2 | 3 | 4;
+
+  type StudyConfig = {
+    version: 1;
+    id: string;
+    createdAt: string;
+    people: string[];
+    flashcardBlockCount: number;
+    flashcardBlockDurationSec: number;
+    snakeEnabled: boolean;
+    snakeDurationSec: number;
+    enabledModes: Mode[];
+  };
+
+  type ResolvedStudyConfig = StudyConfig & {
+    resolvedPeople: Person[];
+  };
+
+  type UuidRegistry = {
+    version: 1;
+    entries: Record<string, string>;
+  };
 
   type IntakeData = { firstName: string; lastName: string; email: string };
 
@@ -31,6 +51,9 @@ declare global {
         intake: IntakeData;
         modeAssignment: Record<string, Mode>;
         people: { id: string; firstName: string }[];
+        studyConfigId: string;
+        blockCount: number;
+        enabledModes: Mode[];
       }
     | { type: 'intro.video.play'; t: number; personId: string; playCount: number }
     | { type: 'intro.video.error'; t: number; personId: string }
@@ -42,7 +65,7 @@ declare global {
         t: number;
         personId: string;
         mode: Mode;
-        sessionLabel: 'A' | 'B';
+        blockLabel: string;
       }
     | {
         type: 'flashcard.bucket';
@@ -51,10 +74,10 @@ declare global {
         bucket: 'still-learning' | 'know-it';
         durationMs: number;
       }
-    | { type: 'flashcard.refill'; t: number; sessionLabel: 'A' | 'B' }
-    | { type: 'snake.start'; t: number }
+    | { type: 'flashcard.refill'; t: number; blockLabel: string }
+    | { type: 'snake.start'; t: number; afterBlockIndex: number }
     | { type: 'snake.gameover'; t: number; score: number }
-    | { type: 'snake.end'; t: number }
+    | { type: 'snake.end'; t: number; afterBlockIndex: number }
     | { type: 'quiz.show'; t: number; personId: string; trueName: string }
     | {
         type: 'quiz.answer';
@@ -69,8 +92,22 @@ declare global {
     | { type: 'session.finalize'; t: number };
 
   type Api = {
-    getPeople: () => Promise<Person[]>;
     getConfig: () => Promise<AppConfig>;
+    getPeopleWithUuids: () => Promise<PersonWithUuid[]>;
+    getRegistry: () => Promise<UuidRegistry>;
+    readStudyFile: (filePath: string) => Promise<{
+      config: StudyConfig;
+      resolvedPeople: Person[];
+    }>;
+    writeStudyFile: (filePath: string, config: StudyConfig) => Promise<void>;
+    showStudyFileOpenDialog: () => Promise<{
+      filePath: string;
+      config: StudyConfig;
+      resolvedPeople: Person[];
+    } | null>;
+    showStudyFileSaveDialog: (
+      config: StudyConfig,
+    ) => Promise<{ filePath: string } | null>;
     startSession: (intake: IntakeData) => Promise<{ participantId: string; sessionDir: string }>;
     logEvent: (event: SessionEvent) => Promise<void>;
     finalizeSession: () => Promise<{ exportDir: string }>;

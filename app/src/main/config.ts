@@ -4,10 +4,6 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 
 export const AppConfigSchema = z.object({
-  numberOfPeople: z.number().int().positive(),
-  numFlashcardSessions: z.number().int().positive(),
-  flashcardSessionDurationSec: z.number().positive(),
-  snakeDurationSec: z.number().positive(),
   recallTimePerFaceSec: z.number().positive(),
   phraseMinChars: z.number().int().nonnegative(),
   fuzzyMatchMaxEdits: z.number().int().nonnegative(),

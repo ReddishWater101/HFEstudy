@@ -1,3 +1,6 @@
-they can only replay the video once, but they cant reply it until the first full video has played.
+when you load the json file, it shows the study details, bad for participant.
 
-remove the ability to use buttons on the keyboard in learning phrase. only the one screen buttons can be clicked to say "still learning" or "i know this"
+
+there should be a "i dont know" button when the test at the end occurs.
+
+we should prevent the user from putting the name of the person directly in the memory phrase.
