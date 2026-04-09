@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { Person } from './assets';
-import type { UuidRegistry } from './peopleRegistry';
+import {
+  getCurrentRegistry,
+  importEntries,
+  type UuidRegistry,
+} from './peopleRegistry';
 
 export const MODE_VALUES = [1, 2, 3, 4] as const;
 
@@ -41,6 +45,8 @@ export const StudyConfigZ = z
         (arr) => new Set(arr).size === arr.length,
         'enabledModes must not contain duplicates',
       ),
+    /** Maps each person UUID to their firstName for cross-machine portability. */
+    personMap: z.record(UuidZ, z.string().min(1)).optional(),
   })
   .strict();
 
@@ -48,14 +54,20 @@ export type StudyConfig = z.infer<typeof StudyConfigZ>;
 
 /**
  * Resolve cfg.people (UUIDs) to actual Person records.
- * Throws a human-readable error if any UUID is missing from the registry
- * or its corresponding firstName is no longer present in the scanned People dir.
+ *
+ * When a study file contains a `personMap` (UUID -> firstName), any UUIDs
+ * that are unknown locally are auto-imported into the registry so that
+ * study files can be shared across machines without manual setup.
+ *
+ * Throws a human-readable error only if a UUID cannot be resolved even
+ * after importing from personMap (e.g. the person's assets are missing).
  */
-export function resolvePeopleOrThrow(
+export async function resolvePeopleOrThrow(
   cfg: StudyConfig,
   registry: UuidRegistry,
   allPeople: Person[],
-): Person[] {
+): Promise<Person[]> {
+  // Build initial lookup from registry
   const byUuid = new Map<string, Person>();
   for (const [firstName, uuid] of Object.entries(registry.entries)) {
     const p = allPeople.find(
@@ -63,10 +75,42 @@ export function resolvePeopleOrThrow(
     );
     if (p) byUuid.set(uuid, p);
   }
+
   const missing = cfg.people.filter((u) => !byUuid.has(u));
-  if (missing.length > 0) {
+
+  // If there are missing UUIDs and a personMap is present, auto-import them
+  if (missing.length > 0 && cfg.personMap) {
+    const toImport: Record<string, string> = {};
+    for (const uuid of missing) {
+      const firstName = cfg.personMap[uuid];
+      if (firstName) {
+        toImport[firstName] = uuid;
+      }
+    }
+    if (Object.keys(toImport).length > 0) {
+      await importEntries(toImport);
+      // Rebuild the lookup after import
+      byUuid.clear();
+      // Re-read the registry (importEntries updates the cache)
+      const updatedRegistry = getCurrentRegistry();
+      for (const [firstName, uuid] of Object.entries(updatedRegistry.entries)) {
+        const p = allPeople.find(
+          (x) => x.firstName.toLowerCase() === firstName.toLowerCase(),
+        );
+        if (p) byUuid.set(uuid, p);
+      }
+    }
+  }
+
+  const stillMissing = cfg.people.filter((u) => !byUuid.has(u));
+  if (stillMissing.length > 0) {
+    // Build a helpful message showing which names are missing
+    const details = stillMissing.map((u) => {
+      const name = cfg.personMap?.[u];
+      return name ? `${u} (${name})` : u;
+    });
     throw new Error(
-      `Study file references ${missing.length} unknown person UUID(s): ${missing.join(', ')}`,
+      `Study file references ${stillMissing.length} person(s) whose assets are not on this machine: ${details.join(', ')}`,
     );
   }
   // preserve order from cfg.people

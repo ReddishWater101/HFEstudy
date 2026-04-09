@@ -58,8 +58,28 @@ async function readAndValidateStudyFile(filePath: string): Promise<{
   const cfg = StudyConfigZ.parse(parsed);
   const registry = getCurrentRegistry();
   const allPeople = await scanPeople();
-  const resolvedPeople = resolvePeopleOrThrow(cfg, registry, allPeople);
+  const resolvedPeople = await resolvePeopleOrThrow(cfg, registry, allPeople);
   return { config: cfg, resolvedPeople };
+}
+
+/**
+ * Build a personMap (UUID -> firstName) for the given study config
+ * by looking up each UUID in the current registry. This is embedded
+ * in saved study files so they are portable across machines.
+ */
+function buildPersonMap(cfg: StudyConfig): Record<string, string> {
+  const registry = getCurrentRegistry();
+  const uuidToName: Record<string, string> = {};
+  for (const [firstName, uuid] of Object.entries(registry.entries)) {
+    uuidToName[uuid] = firstName;
+  }
+  const personMap: Record<string, string> = {};
+  for (const uuid of cfg.people) {
+    if (uuidToName[uuid]) {
+      personMap[uuid] = uuidToName[uuid];
+    }
+  }
+  return personMap;
 }
 
 export function registerIpc(): void {
@@ -92,7 +112,8 @@ export function registerIpc(): void {
       } catch (err) {
         throw new Error(toErrorMessage(err));
       }
-      writeFileAtomic(filePath, JSON.stringify(config, null, 2));
+      const withMap = { ...config, personMap: buildPersonMap(config) };
+      writeFileAtomic(filePath, JSON.stringify(withMap, null, 2));
     },
   );
 
@@ -140,7 +161,8 @@ export function registerIpc(): void {
     if (!filePath.endsWith('.hfestudy.json')) {
       filePath = filePath.replace(/\.json$/i, '') + '.hfestudy.json';
     }
-    writeFileAtomic(filePath, JSON.stringify(cfg, null, 2));
+    const withMap = { ...cfg, personMap: buildPersonMap(cfg) };
+    writeFileAtomic(filePath, JSON.stringify(withMap, null, 2));
     return { filePath };
   });
 
