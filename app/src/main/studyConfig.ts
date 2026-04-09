@@ -67,7 +67,7 @@ export async function resolvePeopleOrThrow(
   registry: UuidRegistry,
   allPeople: Person[],
 ): Promise<Person[]> {
-  // Build initial lookup from registry
+  // Build initial lookup from registry (local UUID -> Person)
   const byUuid = new Map<string, Person>();
   for (const [firstName, uuid] of Object.entries(registry.entries)) {
     const p = allPeople.find(
@@ -78,26 +78,49 @@ export async function resolvePeopleOrThrow(
 
   const missing = cfg.people.filter((u) => !byUuid.has(u));
 
-  // If there are missing UUIDs and a personMap is present, auto-import them
   if (missing.length > 0 && cfg.personMap) {
-    const toImport: Record<string, string> = {};
-    for (const uuid of missing) {
-      const firstName = cfg.personMap[uuid];
-      if (firstName) {
-        toImport[firstName] = uuid;
+    // Build a reverse lookup: local name (lowercase) -> local UUID
+    const localNameToUuid = new Map<string, string>();
+    for (const [firstName, uuid] of Object.entries(registry.entries)) {
+      localNameToUuid.set(firstName.toLowerCase(), uuid);
+    }
+
+    // Phase 1: Remap foreign UUIDs to local UUIDs by matching names
+    for (const foreignUuid of missing) {
+      const firstName = cfg.personMap[foreignUuid];
+      if (!firstName) continue;
+      const localUuid = localNameToUuid.get(firstName.toLowerCase());
+      if (localUuid && localUuid !== foreignUuid) {
+        // The same person exists locally under a different UUID — remap
+        const person = byUuid.get(localUuid);
+        if (person) {
+          byUuid.set(foreignUuid, person);
+        }
       }
     }
-    if (Object.keys(toImport).length > 0) {
-      await importEntries(toImport);
-      // Rebuild the lookup after import
-      byUuid.clear();
-      // Re-read the registry (importEntries updates the cache)
-      const updatedRegistry = getCurrentRegistry();
-      for (const [firstName, uuid] of Object.entries(updatedRegistry.entries)) {
-        const p = allPeople.find(
-          (x) => x.firstName.toLowerCase() === firstName.toLowerCase(),
-        );
-        if (p) byUuid.set(uuid, p);
+
+    // Phase 2: For any still-missing UUIDs, try to import genuinely new people
+    const stillMissingAfterRemap = cfg.people.filter((u) => !byUuid.has(u));
+    if (stillMissingAfterRemap.length > 0) {
+      const toImport: Record<string, string> = {};
+      for (const uuid of stillMissingAfterRemap) {
+        const firstName = cfg.personMap[uuid];
+        if (firstName) {
+          toImport[firstName] = uuid;
+        }
+      }
+      if (Object.keys(toImport).length > 0) {
+        await importEntries(toImport);
+        // Rebuild the lookup after import
+        const updatedRegistry = getCurrentRegistry();
+        for (const [firstName, uuid] of Object.entries(
+          updatedRegistry.entries,
+        )) {
+          const p = allPeople.find(
+            (x) => x.firstName.toLowerCase() === firstName.toLowerCase(),
+          );
+          if (p) byUuid.set(uuid, p);
+        }
       }
     }
   }
