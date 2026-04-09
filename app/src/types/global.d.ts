@@ -30,6 +30,8 @@ declare global {
     snakeEnabled: boolean;
     snakeDurationSec: number;
     enabledModes: Mode[];
+    /** Maps each person UUID to their firstName for cross-machine portability. */
+    personMap?: Record<string, string>;
   };
 
   type ResolvedStudyConfig = StudyConfig & {

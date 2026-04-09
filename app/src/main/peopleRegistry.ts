@@ -85,6 +85,43 @@ export function getCurrentRegistry(): UuidRegistry {
 }
 
 /**
+ * Import UUID -> firstName entries from a study file's personMap.
+ * Only adds entries where the firstName is not already present in the
+ * registry (preserves existing local mappings). Also handles the case
+ * where the name exists but with a different UUID — in that case the
+ * existing local mapping is kept so local study files still work.
+ *
+ * This is the mechanism that makes study files portable across machines.
+ */
+export async function importEntries(
+  nameToUuid: Record<string, string>,
+): Promise<void> {
+  const registry = getCurrentRegistry();
+  const existingNames = new Set(
+    Object.keys(registry.entries).map((n) => n.toLowerCase()),
+  );
+  const existingUuids = new Set(Object.values(registry.entries));
+
+  let added = false;
+  for (const [firstName, uuid] of Object.entries(nameToUuid)) {
+    // Skip if this name already has a mapping
+    if (existingNames.has(firstName.toLowerCase())) continue;
+    // Skip if this UUID is already used for a different name
+    if (existingUuids.has(uuid)) continue;
+    registry.entries[firstName] = uuid;
+    existingNames.add(firstName.toLowerCase());
+    existingUuids.add(uuid);
+    added = true;
+  }
+
+  if (added) {
+    const path = getRegistryPath();
+    await writeRegistryAtomic(path, registry);
+    cachedRegistry = registry;
+  }
+}
+
+/**
  * Look up a uuid by firstName (case-insensitive). Returns null if absent.
  */
 export function personUuid(firstName: string): string | null {
