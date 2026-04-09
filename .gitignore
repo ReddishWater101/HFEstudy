@@ -10,3 +10,4 @@ exports/
 .vscode/
 .idea/
 build/*.exe
+build/*.dmg
