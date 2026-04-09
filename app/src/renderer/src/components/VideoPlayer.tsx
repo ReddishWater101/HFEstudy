@@ -34,6 +34,7 @@ export function VideoPlayer({
   const completedPlayCountRef = useRef(0);
   const countedCurrentPlayRef = useRef(false);
   const stallTimerRef = useRef<number | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
   const hasUsedReplayRef = useRef(false);
   const autoRetryCountRef = useRef(0);
 
@@ -52,6 +53,13 @@ export function VideoPlayer({
     }
   }
 
+  function clearRetryTimer() {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }
+
   // Reset everything when the src changes (new person).
   useEffect(() => {
     startedPlayCountRef.current = 0;
@@ -65,11 +73,13 @@ export function VideoPlayer({
     setIsStalled(false);
     setHasUsedReplay(false);
     clearStallTimer();
+    clearRetryTimer();
     // Force a fresh video element for the new src.
     setVideoKey((k) => k + 1);
 
     return () => {
       clearStallTimer();
+      clearRetryTimer();
     };
   }, [src]);
 
@@ -117,7 +127,8 @@ export function VideoPlayer({
       console.warn(
         `VideoPlayer: transient error, auto-retry ${autoRetryCountRef.current}/${MAX_AUTO_RETRIES}`,
       );
-      setTimeout(() => {
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null;
         setVideoKey((k) => k + 1);
       }, RETRY_DELAY_MS);
       return;
@@ -173,6 +184,7 @@ export function VideoPlayer({
     setHasLoadError(false);
     setIsStalled(false);
     clearStallTimer();
+    clearRetryTimer();
     countedCurrentPlayRef.current = false;
     autoRetryCountRef.current = 0;
 
