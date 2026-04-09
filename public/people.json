@@ -1,0 +1,194 @@
+[
+  {
+    "firstName": "Aaron",
+    "id": "aaron",
+    "uuid": "c91f337f-3670-4851-8699-c046fa0aacf0",
+    "imageUrl": "./People/PFP/Aaron.png",
+    "videoUrl": "./People/videos/Aaron.mp4",
+    "audioUrl": "./People/audio/Aaron.m4a"
+  },
+  {
+    "firstName": "Adrian",
+    "id": "adrian",
+    "uuid": "1c565253-4e21-4e57-aef4-154868da980a",
+    "imageUrl": "./People/PFP/Adrian.png",
+    "videoUrl": "./People/videos/Adrian.mp4",
+    "audioUrl": "./People/audio/Adrian.m4a"
+  },
+  {
+    "firstName": "Aisha",
+    "id": "aisha",
+    "uuid": "7f1c35c4-8e44-4142-9266-c4c48d3a7cd1",
+    "imageUrl": "./People/PFP/Aisha.png",
+    "videoUrl": "./People/videos/Aisha.mp4",
+    "audioUrl": "./People/audio/Aisha.m4a"
+  },
+  {
+    "firstName": "Brian",
+    "id": "brian",
+    "uuid": "c448f6c7-eff9-4bac-8d94-8b41bd75348d",
+    "imageUrl": "./People/PFP/Brian.png",
+    "videoUrl": "./People/videos/Brian.mp4",
+    "audioUrl": "./People/audio/Brian.m4a"
+  },
+  {
+    "firstName": "Carlos",
+    "id": "carlos",
+    "uuid": "807f24cb-190f-4da2-a08e-a43b050c0290",
+    "imageUrl": "./People/PFP/Carlos.png",
+    "videoUrl": "./People/videos/Carlos.mp4",
+    "audioUrl": "./People/audio/Carlos.m4a"
+  },
+  {
+    "firstName": "Christine",
+    "id": "christine",
+    "uuid": "ee47a1bf-92bb-4abc-ad54-601f3869ab1c",
+    "imageUrl": "./People/PFP/Christine.png",
+    "videoUrl": "./People/videos/Christine.mp4",
+    "audioUrl": "./People/audio/Christine.m4a"
+  },
+  {
+    "firstName": "Deborah",
+    "id": "deborah",
+    "uuid": "073f781b-40cd-4b06-b9ad-4a68669b73ac",
+    "imageUrl": "./People/PFP/Deborah.png",
+    "videoUrl": "./People/videos/Deborah.mp4",
+    "audioUrl": "./People/audio/Deborah.m4a"
+  },
+  {
+    "firstName": "Edward",
+    "id": "edward",
+    "uuid": "053701b8-f777-484c-9a22-cdc9c754bafe",
+    "imageUrl": "./People/PFP/Edward.png",
+    "videoUrl": "./People/videos/Edward.mp4",
+    "audioUrl": "./People/audio/Edward.m4a"
+  },
+  {
+    "firstName": "Hassan",
+    "id": "hassan",
+    "uuid": "6dcf16c6-7fb6-4464-8180-30478af8d6be",
+    "imageUrl": "./People/PFP/Hassan.png",
+    "videoUrl": "./People/videos/Hassan.mp4",
+    "audioUrl": "./People/audio/Hassan.m4a"
+  },
+  {
+    "firstName": "Jason",
+    "id": "jason",
+    "uuid": "b6d9386c-fc09-439d-b5b3-2d800bfa4b85",
+    "imageUrl": "./People/PFP/Jason.png",
+    "videoUrl": "./People/videos/Jason.mp4",
+    "audioUrl": "./People/audio/Jason.m4a"
+  },
+  {
+    "firstName": "Jeffrey",
+    "id": "jeffrey",
+    "uuid": "0281beaa-c1a6-4ff0-bbc3-9ad29c517ac6",
+    "imageUrl": "./People/PFP/Jeffrey.png",
+    "videoUrl": "./People/videos/Jeffrey.mp4",
+    "audioUrl": "./People/audio/Jeffrey.m4a"
+  },
+  {
+    "firstName": "Jonathan",
+    "id": "jonathan",
+    "uuid": "b85eea6f-229b-4443-b924-c28548f58910",
+    "imageUrl": "./People/PFP/Jonathan.png",
+    "videoUrl": "./People/videos/Jonathan.mp4",
+    "audioUrl": "./People/audio/Jonathan.m4a"
+  },
+  {
+    "firstName": "Kevin",
+    "id": "kevin",
+    "uuid": "00139e59-0013-44f9-8ed7-a3fa8b64738f",
+    "imageUrl": "./People/PFP/Kevin.png",
+    "videoUrl": "./People/videos/Kevin.mp4",
+    "audioUrl": "./People/audio/Kevin.m4a"
+  },
+  {
+    "firstName": "Lily",
+    "id": "lily",
+    "uuid": "8a1c09d6-4fd8-4547-8fcc-0430e2752ac6",
+    "imageUrl": "./People/PFP/Lily.png",
+    "videoUrl": "./People/videos/Lily.mp4",
+    "audioUrl": "./People/audio/Lily.m4a"
+  },
+  {
+    "firstName": "Linda",
+    "id": "linda",
+    "uuid": "f54c2167-5f94-4f94-818b-299c5f79248c",
+    "imageUrl": "./People/PFP/Linda.png",
+    "videoUrl": "./People/videos/Linda.mp4",
+    "audioUrl": "./People/audio/Linda.m4a"
+  },
+  {
+    "firstName": "Megan",
+    "id": "megan",
+    "uuid": "093447ab-6849-4cf4-9fb0-3361e6fe231c",
+    "imageUrl": "./People/PFP/Megan.png",
+    "videoUrl": "./People/videos/Megan.mp4",
+    "audioUrl": "./People/audio/Megan.m4a"
+  },
+  {
+    "firstName": "Mike",
+    "id": "mike",
+    "uuid": "764b388f-d6db-4517-b91f-b669659d84e9",
+    "imageUrl": "./People/PFP/Mike.png",
+    "videoUrl": "./People/videos/Mike.mp4",
+    "audioUrl": "./People/audio/Mike.m4a"
+  },
+  {
+    "firstName": "Olivia",
+    "id": "olivia",
+    "uuid": "a160a012-bfc9-43d1-9ad2-06bd062fd026",
+    "imageUrl": "./People/PFP/Olivia.png",
+    "videoUrl": "./People/videos/Olivia.mp4",
+    "audioUrl": "./People/audio/Olivia.m4a"
+  },
+  {
+    "firstName": "Omar",
+    "id": "omar",
+    "uuid": "8e3e1231-70c2-4d88-8433-9541f3f3e2f6",
+    "imageUrl": "./People/PFP/Omar.png",
+    "videoUrl": "./People/videos/Omar.mp4",
+    "audioUrl": "./People/audio/Omar.m4a"
+  },
+  {
+    "firstName": "Priya",
+    "id": "priya",
+    "uuid": "1e2f0fa9-80b3-4581-9a17-c795e064320c",
+    "imageUrl": "./People/PFP/Priya.png",
+    "videoUrl": "./People/videos/Priya.mp4",
+    "audioUrl": "./People/audio/Priya.m4a"
+  },
+  {
+    "firstName": "Sarah",
+    "id": "sarah",
+    "uuid": "44cad910-6c25-48c6-9e78-1878a9b1c52b",
+    "imageUrl": "./People/PFP/Sarah.png",
+    "videoUrl": "./People/videos/Sarah.mp4",
+    "audioUrl": "./People/audio/Sarah.m4a"
+  },
+  {
+    "firstName": "Sharon",
+    "id": "sharon",
+    "uuid": "45a0f45c-2709-4275-9b79-0ddca9349933",
+    "imageUrl": "./People/PFP/Sharon.png",
+    "videoUrl": "./People/videos/Sharon.mp4",
+    "audioUrl": "./People/audio/Sharon.m4a"
+  },
+  {
+    "firstName": "Victoria",
+    "id": "victoria",
+    "uuid": "1b738b2a-8ede-439e-bfdc-4ad85f11acf5",
+    "imageUrl": "./People/PFP/Victoria.png",
+    "videoUrl": "./People/videos/Victoria.mp4",
+    "audioUrl": "./People/audio/Victoria.m4a"
+  },
+  {
+    "firstName": "Wei",
+    "id": "wei",
+    "uuid": "ac0f4eab-e825-451e-8220-466273e4b651",
+    "imageUrl": "./People/PFP/Wei.png",
+    "videoUrl": "./People/videos/Wei.mp4",
+    "audioUrl": "./People/audio/Wei.m4a"
+  }
+]
