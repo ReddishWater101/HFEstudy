@@ -6,6 +6,7 @@ import { describeEvenSplit } from '../../lib/evenSplit';
 import { ConfigSection } from './ConfigSection';
 import { PeopleGrid } from './PeopleGrid';
 import { PersonPreviewModal } from './PersonPreviewModal';
+import { ResultsAnalyzer } from './ResultsAnalyzer';
 import { builderReducer, initialBuilderState } from './reducer';
 
 export function ProctorBuilder() {
@@ -176,6 +177,8 @@ export function ProctorBuilder() {
             {saveStatus}
           </p>
         ) : null}
+
+        <ResultsAnalyzer />
       </div>
 
       <PersonPreviewModal
