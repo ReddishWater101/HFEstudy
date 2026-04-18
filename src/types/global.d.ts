@@ -45,6 +45,22 @@ declare global {
 
   type IntakeData = { firstName: string; lastName: string; email: string };
 
+  type SurveyAnswers = {
+    age: string;
+    gender: string;
+    academicStatus: string;
+    fieldOfStudy: string;
+    eventFrequency: string;
+    nameRecallAbility: string;
+    strategies: string[];
+    learningStyle: string;
+    mobileAppFrequency: string;
+    usedMemoryApp: string;
+    visionImpairment: string;
+    hearingImpairment: string;
+    fatigueNotes: string;
+  };
+
   type SessionEvent =
     | {
         type: 'session.start';
@@ -92,6 +108,7 @@ declare global {
       }
     | { type: 'quiz.idk'; t: number; personId: string; rtMs: number }
     | { type: 'quiz.timeout'; t: number; personId: string }
+    | { type: 'survey.submit'; t: number; answers: SurveyAnswers }
     | { type: 'session.finalize'; t: number };
 
   type Api = {

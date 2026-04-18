@@ -14,7 +14,12 @@ let sessionEvents: SessionEvent[] = [];
 
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const s = String(value);
+  let s = String(value);
+  // CSV-injection defense: prefix leading =, +, -, @, tab, CR with a single quote
+  // so spreadsheet apps treat the cell as text, not a formula.
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = "'" + s;
+  }
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
@@ -77,6 +82,7 @@ function triggerDownload(blob: Blob, filename: string): void {
 
 type SessionStartEvent = Extract<SessionEvent, { type: 'session.start' }>;
 type FlashcardShowEvent = Extract<SessionEvent, { type: 'flashcard.show' }>;
+type SurveySubmitEvent = Extract<SessionEvent, { type: 'survey.submit' }>;
 
 function buildRecallRows(
   events: SessionEvent[],
@@ -150,6 +156,53 @@ function buildStudyLogRows(events: SessionEvent[]): Record<string, unknown>[] {
     }
   }
   return rows;
+}
+
+const SURVEY_HEADERS = {
+  age: 'Age',
+  gender: 'Gender Identity',
+  academicStatus: 'Academic Status',
+  fieldOfStudy: 'Field of Study',
+  eventFrequency:
+    'How often do you attend networking or social events where you meet new people?',
+  nameRecallAbility: 'How would you rate your ability to remember names?',
+  strategies: 'Do you typically use any strategies to remember names?',
+  learningStyle: 'Which learning style do you feel works best for you?',
+  mobileAppFrequency:
+    'How frequently do you use mobile apps for learning or productivity?',
+  usedMemoryApp: 'Have you ever used a memory-support or learning app before?',
+  visionImpairment:
+    'Do you have any vision impairments (corrected or uncorrected) that may affect your ability to see visual content?',
+  hearingImpairment:
+    'Do you have any hearing impairments that may affect your ability to hear audio content?',
+  fatigueNotes:
+    'Is there anything that may affect your ability to complete this task (e.g., fatigue, distractions)?',
+} as const;
+
+function buildSurveyRows(events: SessionEvent[]): Record<string, unknown>[] {
+  const row: Record<string, unknown> = {};
+  for (const header of Object.values(SURVEY_HEADERS)) {
+    row[header] = '';
+  }
+  const ev = events.find(
+    (e): e is SurveySubmitEvent => e.type === 'survey.submit',
+  );
+  if (!ev) return [row];
+  const a = ev.answers;
+  row[SURVEY_HEADERS.age] = a.age;
+  row[SURVEY_HEADERS.gender] = a.gender;
+  row[SURVEY_HEADERS.academicStatus] = a.academicStatus;
+  row[SURVEY_HEADERS.fieldOfStudy] = a.fieldOfStudy;
+  row[SURVEY_HEADERS.eventFrequency] = a.eventFrequency;
+  row[SURVEY_HEADERS.nameRecallAbility] = a.nameRecallAbility;
+  row[SURVEY_HEADERS.strategies] = a.strategies.join('; ');
+  row[SURVEY_HEADERS.learningStyle] = a.learningStyle;
+  row[SURVEY_HEADERS.mobileAppFrequency] = a.mobileAppFrequency;
+  row[SURVEY_HEADERS.usedMemoryApp] = a.usedMemoryApp;
+  row[SURVEY_HEADERS.visionImpairment] = a.visionImpairment;
+  row[SURVEY_HEADERS.hearingImpairment] = a.hearingImpairment;
+  row[SURVEY_HEADERS.fatigueNotes] = a.fatigueNotes;
+  return [row];
 }
 
 function buildMemoryPhraseRows(
@@ -376,6 +429,7 @@ async function downloadSessionZip(): Promise<{ zipPath: string }> {
   const recallCsv = toCsv(buildRecallRows(events, modeAssignment));
   const studyLogCsv = toCsv(buildStudyLogRows(events));
   const memoryPhrasesCsv = toCsv(buildMemoryPhraseRows(events, modeAssignment, people));
+  const surveyCsv = toCsv(buildSurveyRows(events));
 
   // Create zip
   const zip = new JSZip();
@@ -384,6 +438,7 @@ async function downloadSessionZip(): Promise<{ zipPath: string }> {
   zip.file('recall.csv', recallCsv);
   zip.file('study_log.csv', studyLogCsv);
   zip.file('memory_phrases.csv', memoryPhrasesCsv);
+  zip.file('survey.csv', surveyCsv);
 
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
 

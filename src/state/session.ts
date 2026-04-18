@@ -7,6 +7,7 @@ export type Phase =
   | { kind: 'flashcard'; blockIndex: number }
   | { kind: 'snake'; afterBlockIndex: number }
   | { kind: 'quiz' }
+  | { kind: 'survey' }
   | { kind: 'end' };
 
 export type SessionState = {
@@ -64,6 +65,8 @@ export function nextPhase(phase: Phase, sc: StudyConfig | null): Phase {
       return { kind: 'flashcard', blockIndex: nextBlock };
     }
     case 'quiz':
+      return { kind: 'survey' };
+    case 'survey':
       return { kind: 'end' };
     case 'end':
       return phase;

@@ -5,6 +5,7 @@ import { IntroVideoPhase } from './phases/IntroVideoPhase';
 import { FlashcardPhase } from './phases/FlashcardPhase';
 import { SnakePhase } from './phases/SnakePhase';
 import { QuizPhase } from './phases/QuizPhase';
+import { SurveyPhase } from './phases/SurveyPhase';
 import { EndPhase } from './phases/EndPhase';
 
 function PhaseSwitcher() {
@@ -17,6 +18,7 @@ function PhaseSwitcher() {
     return <FlashcardPhase key={phase.blockIndex} blockIndex={phase.blockIndex} />;
   if (phase.kind === 'snake') return <SnakePhase />;
   if (phase.kind === 'quiz') return <QuizPhase />;
+  if (phase.kind === 'survey') return <SurveyPhase />;
   if (phase.kind === 'end') return <EndPhase />;
 
   return null;
