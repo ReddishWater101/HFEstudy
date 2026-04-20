@@ -1,5 +1,4 @@
 import {
-  MODE_LABELS,
   MODE_SHORT_LABELS,
   type AnovaOutput,
   type RecallTimeModeData,
@@ -24,6 +23,9 @@ const GROUP_COLORS: Record<Mode, string> = {
   3: '#00BFC4', // NP+T -> NoCue (teal)
   4: '#00BFC4', // NP+A -> NoCue (teal)
 };
+
+const CUE_COLOR = '#F8766D';
+const NOCUE_COLOR = '#00BFC4';
 
 const BAR_SUB_LABEL: Record<Mode, string> = {
   1: 'Cue',
@@ -220,6 +222,8 @@ export function RecallTimeChart({
           ) : (
             <EmptyState />
           )}
+
+          <Legend />
         </div>
 
         <aside className="w-full shrink-0 lg:w-72">
@@ -422,24 +426,29 @@ function StatsTable({
       <p className="text-[11px] leading-snug text-neutral-400">
         n = quiz trials (correct + incorrect). Cross marker in chart is the mean.
       </p>
-      <div className="flex flex-col gap-1 text-[11px] text-neutral-500">
-        <p className="uppercase tracking-widest text-[10px] text-neutral-400">
-          Mode key
-        </p>
-        {DISPLAY_ORDER.map((mode) => (
-          <div key={mode} className="flex items-center gap-2">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: GROUP_COLORS[mode] }}
-              aria-hidden
-            />
-            <span>
-              {MODE_SHORT_LABELS[mode]} &mdash; {MODE_LABELS[mode]}
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-neutral-500">
+      <LegendChip label="Cue (phrase)" color={CUE_COLOR} />
+      <LegendChip label="NoCue (no phrase)" color={NOCUE_COLOR} />
+    </div>
+  );
+}
+
+function LegendChip({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className="inline-block h-2.5 w-4 rounded-sm"
+        style={{ backgroundColor: color }}
+        aria-hidden
+      />
+      <span>{label}</span>
+    </span>
   );
 }
 

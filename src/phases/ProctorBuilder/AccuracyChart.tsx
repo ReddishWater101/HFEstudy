@@ -432,20 +432,6 @@ function StatsTable({
         </tbody>
       </table>
       <AnovaBlock anova={anova} />
-      <div className="flex flex-col gap-1 text-[11px] text-neutral-500">
-        <p className="uppercase tracking-widest text-[10px] text-neutral-400">
-          Breakdown (trials)
-        </p>
-        {data.map((row) => (
-          <div key={row.mode} className="flex items-center justify-between gap-2">
-            <span>{MODE_SHORT_LABELS[row.mode]}</span>
-            <span className="tabular-nums text-neutral-400">
-              {row.correct}C &middot; {row.incorrect}I &middot; {row.idk} IDK &middot;{' '}
-              {row.timeout}T
-            </span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
