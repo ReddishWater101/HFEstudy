@@ -1,6 +1,4 @@
 import {
-  ALL_MODES,
-  MODE_COLORS,
   MODE_LABELS,
   MODE_SHORT_LABELS,
   type RecallTimeModeData,
@@ -8,7 +6,30 @@ import {
 
 const WIDTH = 760;
 const HEIGHT = 360;
-const PADDING = { top: 24, right: 28, bottom: 64, left: 56 };
+const PADDING = { top: 24, right: 28, bottom: 76, left: 56 };
+
+// Regroup the four modes into two modality clusters (Audio, Visual) with
+// Cue/NoCue bars adjacent inside each cluster. Visual layout only — underlying
+// data and stats are unchanged.
+const DISPLAY_ORDER: readonly Mode[] = [2, 4, 1, 3];
+const BAR_X_PCTS = [0.20, 0.30, 0.70, 0.80] as const;
+const GROUP_CENTERS_PCT = [0.25, 0.75] as const;
+
+// Two-colour palette keyed by Cue (phrase) vs NoCue (no-phrase). Matches the
+// ggplot2 scale_fill_hue defaults from docs/grouping.png.
+const GROUP_COLORS: Record<Mode, string> = {
+  1: '#F8766D', // P+T  -> Cue   (salmon)
+  2: '#F8766D', // P+A  -> Cue   (salmon)
+  3: '#00BFC4', // NP+T -> NoCue (teal)
+  4: '#00BFC4', // NP+A -> NoCue (teal)
+};
+
+const BAR_SUB_LABEL: Record<Mode, string> = {
+  1: 'Cue',
+  2: 'Cue',
+  3: 'NoCue',
+  4: 'NoCue',
+};
 
 function niceMax(raw: number): number {
   if (!Number.isFinite(raw) || raw <= 0) return 1;
@@ -33,9 +54,13 @@ function jitterOffset(mode: Mode, index: number, spread: number): number {
 
 function xForMode(mode: Mode): number {
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
-  const step = chartWidth / ALL_MODES.length;
-  const index = ALL_MODES.indexOf(mode);
-  return PADDING.left + step * (index + 0.5);
+  const displayIdx = DISPLAY_ORDER.indexOf(mode);
+  return PADDING.left + chartWidth * BAR_X_PCTS[displayIdx];
+}
+
+function xForGroup(groupIdx: 0 | 1): number {
+  const chartWidth = WIDTH - PADDING.left - PADDING.right;
+  return PADDING.left + chartWidth * GROUP_CENTERS_PCT[groupIdx];
 }
 
 function yForValue(value: number, maxValue: number): number {
@@ -58,9 +83,9 @@ export function RecallTimeChart({ data }: { data: RecallTimeModeData[] }) {
   const tickValues = [0, chartMax / 4, chartMax / 2, (chartMax * 3) / 4, chartMax];
 
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
-  const columnWidth = chartWidth / ALL_MODES.length;
-  const boxHalf = Math.min(28, columnWidth * 0.22);
-  const stripHalf = boxHalf + 10;
+  const withinPairPx = chartWidth * (BAR_X_PCTS[1] - BAR_X_PCTS[0]);
+  const boxHalf = Math.min(24, withinPairPx * 0.35);
+  const stripHalf = Math.min(30, withinPairPx * 0.46);
 
   return (
     <section className="flex flex-col gap-3 bg-white px-6 py-6">
@@ -86,7 +111,7 @@ export function RecallTimeChart({ data }: { data: RecallTimeModeData[] }) {
               preserveAspectRatio="xMidYMid meet"
               className="h-auto w-full"
               role="img"
-              aria-label="Box and strip plot of recall time per mode"
+              aria-label="Box and strip plot of recall time per mode, grouped by modality"
             >
               {/* y grid + labels */}
               {tickValues.map((tick, i) => {
@@ -113,7 +138,7 @@ export function RecallTimeChart({ data }: { data: RecallTimeModeData[] }) {
                 );
               })}
 
-              {/* axis labels */}
+              {/* y-axis title */}
               <text
                 x={PADDING.left - 42}
                 y={PADDING.top + (HEIGHT - PADDING.top - PADDING.bottom) / 2}
@@ -126,34 +151,52 @@ export function RecallTimeChart({ data }: { data: RecallTimeModeData[] }) {
                 Recall time (s)
               </text>
 
-              {/* x labels */}
-              {ALL_MODES.map((mode) => {
+              {/* per-bar sub-labels (Cue / NoCue + n) */}
+              {DISPLAY_ORDER.map((mode) => {
                 const x = xForMode(mode);
                 const entry = data.find((m) => m.mode === mode);
                 const n = entry?.n ?? 0;
                 return (
-                  <g key={mode}>
+                  <g key={`label-${mode}`}>
                     <text
                       x={x}
-                      y={HEIGHT - PADDING.bottom + 18}
+                      y={HEIGHT - PADDING.bottom + 16}
                       textAnchor="middle"
                       className="fill-neutral-600 text-[11px]"
                     >
-                      Mode {mode}
+                      {BAR_SUB_LABEL[mode]}
                     </text>
                     <text
                       x={x}
-                      y={HEIGHT - PADDING.bottom + 32}
+                      y={HEIGHT - PADDING.bottom + 28}
                       textAnchor="middle"
                       className="fill-neutral-400 text-[10px]"
                     >
-                      {MODE_SHORT_LABELS[mode]} &middot; n={n}
+                      n={n}
                     </text>
                   </g>
                 );
               })}
 
-              {ALL_MODES.map((mode) => {
+              {/* group labels (Audio / Visual) */}
+              <text
+                x={xForGroup(0)}
+                y={HEIGHT - PADDING.bottom + 52}
+                textAnchor="middle"
+                className="fill-neutral-700 text-[12px] font-medium"
+              >
+                Audio
+              </text>
+              <text
+                x={xForGroup(1)}
+                y={HEIGHT - PADDING.bottom + 52}
+                textAnchor="middle"
+                className="fill-neutral-700 text-[12px] font-medium"
+              >
+                Visual
+              </text>
+
+              {DISPLAY_ORDER.map((mode) => {
                 const entry = data.find((m) => m.mode === mode);
                 if (!entry) return null;
                 return (
@@ -192,7 +235,7 @@ function ModeColumn({
   stripHalf: number;
 }) {
   const { mode, rtSec, q1, q3, median, mean, min, max } = entry;
-  const color = MODE_COLORS[mode];
+  const color = GROUP_COLORS[mode];
   const xCenter = xForMode(mode);
 
   if (rtSec.length === 0) {
@@ -208,7 +251,6 @@ function ModeColumn({
     );
   }
 
-  // Strip plot: all trial dots, jittered in x.
   const stripDots = rtSec.map((value, index) => (
     <circle
       key={index}
@@ -220,7 +262,6 @@ function ModeColumn({
     />
   ));
 
-  // Box only makes sense with >= 2 values; single-value fallback just shows the dot.
   if (q1 === null || q3 === null || median === null) return <g>{stripDots}</g>;
 
   const iqr = q3 - q1;
@@ -240,7 +281,6 @@ function ModeColumn({
     <g>
       {stripDots}
 
-      {/* Whisker vertical line */}
       <line
         x1={xCenter}
         x2={xCenter}
@@ -250,7 +290,6 @@ function ModeColumn({
         strokeOpacity="0.55"
         strokeWidth="1.25"
       />
-      {/* Whisker caps */}
       <line
         x1={xCenter - boxHalf * 0.55}
         x2={xCenter + boxHalf * 0.55}
@@ -270,7 +309,6 @@ function ModeColumn({
         strokeWidth="1.25"
       />
 
-      {/* Box: Q1..Q3 */}
       <rect
         x={xCenter - boxHalf}
         y={yQ3}
@@ -281,7 +319,6 @@ function ModeColumn({
         stroke={color}
         strokeWidth="1.5"
       />
-      {/* Median line */}
       <line
         x1={xCenter - boxHalf}
         x2={xCenter + boxHalf}
@@ -291,7 +328,6 @@ function ModeColumn({
         strokeWidth="2.25"
       />
 
-      {/* Mean marker */}
       {mean !== null ? (
         <g>
           <circle
@@ -355,7 +391,7 @@ function StatsTable({ data }: { data: RecallTimeModeData[] }) {
                 <span className="flex items-center gap-2">
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ backgroundColor: MODE_COLORS[row.mode] }}
+                    style={{ backgroundColor: GROUP_COLORS[row.mode] }}
                     aria-hidden
                   />
                   <span>{MODE_SHORT_LABELS[row.mode]}</span>
@@ -376,11 +412,11 @@ function StatsTable({ data }: { data: RecallTimeModeData[] }) {
         <p className="uppercase tracking-widest text-[10px] text-neutral-400">
           Mode key
         </p>
-        {ALL_MODES.map((mode) => (
+        {DISPLAY_ORDER.map((mode) => (
           <div key={mode} className="flex items-center gap-2">
             <span
               className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: MODE_COLORS[mode] }}
+              style={{ backgroundColor: GROUP_COLORS[mode] }}
               aria-hidden
             />
             <span>

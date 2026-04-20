@@ -1,6 +1,4 @@
 import {
-  ALL_MODES,
-  MODE_COLORS,
   MODE_LABELS,
   MODE_SHORT_LABELS,
   type AccuracyModeData,
@@ -8,7 +6,7 @@ import {
 
 const WIDTH = 760;
 const HEIGHT = 360;
-const PADDING = { top: 34, right: 28, bottom: 60, left: 56 };
+const PADDING = { top: 34, right: 28, bottom: 72, left: 56 };
 const Y_TICKS = [0, 0.25, 0.5, 0.75, 1];
 
 const OUTCOME_COLORS = {
@@ -16,6 +14,31 @@ const OUTCOME_COLORS = {
   idk: '#a1a1aa', // zinc-400
   timeout: '#d4d4d8', // zinc-300
 } as const;
+
+// Regroup the four modes into two modality clusters (Audio, Visual) with
+// Cue/NoCue bars adjacent inside each cluster. Visual layout only.
+const DISPLAY_ORDER: readonly Mode[] = [2, 4, 1, 3];
+const BAR_X_PCTS = [0.20, 0.30, 0.70, 0.80] as const;
+const GROUP_CENTERS_PCT = [0.25, 0.75] as const;
+
+// Two-colour palette keyed by Cue (phrase) vs NoCue (no-phrase). Matches the
+// ggplot2 scale_fill_hue defaults from docs/grouping.png.
+const GROUP_COLORS: Record<Mode, string> = {
+  1: '#F8766D', // P+T  -> Cue
+  2: '#F8766D', // P+A  -> Cue
+  3: '#00BFC4', // NP+T -> NoCue
+  4: '#00BFC4', // NP+A -> NoCue
+};
+
+const CUE_COLOR = '#F8766D';
+const NOCUE_COLOR = '#00BFC4';
+
+const BAR_SUB_LABEL: Record<Mode, string> = {
+  1: 'Cue',
+  2: 'Cue',
+  3: 'NoCue',
+  4: 'NoCue',
+};
 
 function yForProportion(p: number): number {
   const chartHeight = HEIGHT - PADDING.top - PADDING.bottom;
@@ -25,9 +48,13 @@ function yForProportion(p: number): number {
 
 function xForMode(mode: Mode): number {
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
-  const step = chartWidth / ALL_MODES.length;
-  const index = ALL_MODES.indexOf(mode);
-  return PADDING.left + step * (index + 0.5);
+  const displayIdx = DISPLAY_ORDER.indexOf(mode);
+  return PADDING.left + chartWidth * BAR_X_PCTS[displayIdx];
+}
+
+function xForGroup(groupIdx: 0 | 1): number {
+  const chartWidth = WIDTH - PADDING.left - PADDING.right;
+  return PADDING.left + chartWidth * GROUP_CENTERS_PCT[groupIdx];
 }
 
 function formatPercent(value: number | null, digits = 0): string {
@@ -39,8 +66,8 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
   const hasData = data.some((m) => m.total > 0);
 
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
-  const columnWidth = chartWidth / ALL_MODES.length;
-  const barHalf = Math.min(38, columnWidth * 0.3);
+  const withinPairPx = chartWidth * (BAR_X_PCTS[1] - BAR_X_PCTS[0]);
+  const barHalf = Math.min(30, withinPairPx * 0.45);
 
   return (
     <section className="flex flex-col gap-3 bg-white px-6 py-6">
@@ -66,9 +93,8 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
               preserveAspectRatio="xMidYMid meet"
               className="h-auto w-full"
               role="img"
-              aria-label="Stacked bar chart of quiz outcomes per mode"
+              aria-label="Stacked bar chart of quiz outcomes per mode, grouped by modality"
             >
-              {/* y grid + labels */}
               {Y_TICKS.map((tick) => {
                 const y = yForProportion(tick);
                 return (
@@ -93,7 +119,6 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
                 );
               })}
 
-              {/* axis labels */}
               <text
                 x={PADDING.left - 42}
                 y={PADDING.top + (HEIGHT - PADDING.top - PADDING.bottom) / 2}
@@ -106,42 +131,54 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
                 Proportion of trials
               </text>
 
-              {/* x labels */}
-              {ALL_MODES.map((mode) => {
+              {/* per-bar sub-labels (Cue / NoCue + n) */}
+              {DISPLAY_ORDER.map((mode) => {
                 const x = xForMode(mode);
                 const entry = data.find((m) => m.mode === mode);
                 return (
-                  <g key={mode}>
+                  <g key={`label-${mode}`}>
                     <text
                       x={x}
-                      y={HEIGHT - PADDING.bottom + 18}
+                      y={HEIGHT - PADDING.bottom + 16}
                       textAnchor="middle"
                       className="fill-neutral-600 text-[11px]"
                     >
-                      Mode {mode}
+                      {BAR_SUB_LABEL[mode]}
                     </text>
                     <text
                       x={x}
-                      y={HEIGHT - PADDING.bottom + 32}
+                      y={HEIGHT - PADDING.bottom + 28}
                       textAnchor="middle"
                       className="fill-neutral-400 text-[10px]"
                     >
-                      {MODE_SHORT_LABELS[mode]} &middot; n={entry?.total ?? 0}
+                      n={entry?.total ?? 0}
                     </text>
                   </g>
                 );
               })}
 
-              {ALL_MODES.map((mode) => {
+              {/* group labels (Audio / Visual) */}
+              <text
+                x={xForGroup(0)}
+                y={HEIGHT - PADDING.bottom + 52}
+                textAnchor="middle"
+                className="fill-neutral-700 text-[12px] font-medium"
+              >
+                Audio
+              </text>
+              <text
+                x={xForGroup(1)}
+                y={HEIGHT - PADDING.bottom + 52}
+                textAnchor="middle"
+                className="fill-neutral-700 text-[12px] font-medium"
+              >
+                Visual
+              </text>
+
+              {DISPLAY_ORDER.map((mode) => {
                 const entry = data.find((m) => m.mode === mode);
                 if (!entry) return null;
-                return (
-                  <ModeBar
-                    key={mode}
-                    entry={entry}
-                    barHalf={barHalf}
-                  />
-                );
+                return <ModeBar key={mode} entry={entry} barHalf={barHalf} />;
               })}
             </svg>
           ) : (
@@ -159,13 +196,7 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
   );
 }
 
-function ModeBar({
-  entry,
-  barHalf,
-}: {
-  entry: AccuracyModeData;
-  barHalf: number;
-}) {
+function ModeBar({ entry, barHalf }: { entry: AccuracyModeData; barHalf: number }) {
   const { mode, total, correct, incorrect, idk, timeout, accuracy, ci95Lower, ci95Upper } = entry;
   const xCenter = xForMode(mode);
 
@@ -193,11 +224,10 @@ function ModeBar({
   const idkTop = yForProportion(pCorrect + pIncorrect + pIdk);
   const timeoutTop = yForProportion(pCorrect + pIncorrect + pIdk + pTimeout);
 
-  const color = MODE_COLORS[mode];
+  const color = GROUP_COLORS[mode];
 
   return (
     <g>
-      {/* Correct (mode color) */}
       {pCorrect > 0 ? (
         <rect
           x={xCenter - barHalf}
@@ -213,7 +243,6 @@ function ModeBar({
         </rect>
       ) : null}
 
-      {/* Incorrect */}
       {pIncorrect > 0 ? (
         <rect
           x={xCenter - barHalf}
@@ -228,7 +257,6 @@ function ModeBar({
         </rect>
       ) : null}
 
-      {/* IDK */}
       {pIdk > 0 ? (
         <rect
           x={xCenter - barHalf}
@@ -243,7 +271,6 @@ function ModeBar({
         </rect>
       ) : null}
 
-      {/* Timeout */}
       {pTimeout > 0 ? (
         <rect
           x={xCenter - barHalf}
@@ -258,7 +285,6 @@ function ModeBar({
         </rect>
       ) : null}
 
-      {/* Outline around the whole bar for crispness */}
       <rect
         x={xCenter - barHalf}
         y={timeoutTop}
@@ -269,7 +295,6 @@ function ModeBar({
         strokeWidth="1"
       />
 
-      {/* 95% CI bracket for accuracy */}
       {ci95Lower !== null && ci95Upper !== null && total >= 5 ? (
         <g>
           <line
@@ -299,7 +324,6 @@ function ModeBar({
         </g>
       ) : null}
 
-      {/* Accuracy label above the bar */}
       <text
         x={xCenter}
         y={PADDING.top - 10}
@@ -323,7 +347,8 @@ function EmptyState() {
 function Legend() {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-neutral-500">
-      <LegendChip label="Correct (by mode)" swatch="mode" />
+      <LegendChip label="Cue (phrase)" color={CUE_COLOR} />
+      <LegendChip label="NoCue (no phrase)" color={NOCUE_COLOR} />
       <LegendChip label="Incorrect" color={OUTCOME_COLORS.incorrect} />
       <LegendChip label="IDK" color={OUTCOME_COLORS.idk} />
       <LegendChip label="Timeout" color={OUTCOME_COLORS.timeout} />
@@ -339,31 +364,7 @@ function Legend() {
   );
 }
 
-function LegendChip({
-  label,
-  color,
-  swatch,
-}: {
-  label: string;
-  color?: string;
-  swatch?: 'mode';
-}) {
-  if (swatch === 'mode') {
-    return (
-      <span className="flex items-center gap-2">
-        <span className="inline-flex h-2.5 overflow-hidden rounded-sm" aria-hidden>
-          {ALL_MODES.map((mode) => (
-            <span
-              key={mode}
-              className="block h-2.5 w-2"
-              style={{ backgroundColor: MODE_COLORS[mode] }}
-            />
-          ))}
-        </span>
-        <span>{label}</span>
-      </span>
-    );
-  }
+function LegendChip({ label, color }: { label: string; color: string }) {
   return (
     <span className="flex items-center gap-2">
       <span
@@ -398,7 +399,7 @@ function StatsTable({ data }: { data: AccuracyModeData[] }) {
                 <span className="flex items-center gap-2">
                   <span
                     className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ backgroundColor: MODE_COLORS[row.mode] }}
+                    style={{ backgroundColor: GROUP_COLORS[row.mode] }}
                     aria-hidden
                   />
                   <span>{MODE_SHORT_LABELS[row.mode]}</span>
