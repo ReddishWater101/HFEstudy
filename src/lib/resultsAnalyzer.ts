@@ -21,6 +21,7 @@ type StudyExposure = {
 };
 
 type QuizAttempt = {
+  personId: string;
   mode: Mode | null;
   outcome: 'correct' | 'incorrect' | 'idk' | 'timeout';
   rtMs: number | null;
@@ -44,83 +45,90 @@ export type UploadFailure = {
   message: string;
 };
 
-export type UploadedSessionRow = {
-  participantLabel: string;
-  participantId: string;
-  fileName: string;
-  fileSizeKb: number;
-  studyConfigId: string | null;
-  blockCount: number;
-  enabledModesLabel: string;
+// 2x2 factorial: {phrase, no-phrase} x {text, audio}
+export const MODE_LABELS: Record<Mode, string> = {
+  1: 'Phrase + Text',
+  2: 'Phrase + Audio',
+  3: 'No-phrase + Text',
+  4: 'No-phrase + Audio',
 };
 
-export type ParticipantSummary = {
-  participantLabel: string;
-  participantId: string;
-  fileName: string;
-  studyConfigId: string | null;
-  blockCount: number;
-  enabledModesLabel: string;
-  totalFlashcards: number;
-  overallKnowItRate: number | null;
-  quizAccuracy: number | null;
-  questionCount: number;
-  correctCount: number;
-  idkCount: number;
-  timeoutCount: number;
-  avgQuizRtSec: number | null;
+export const MODE_SHORT_LABELS: Record<Mode, string> = {
+  1: 'P+T',
+  2: 'P+A',
+  3: 'NP+T',
+  4: 'NP+A',
 };
 
-export type BlockTrendPoint = {
-  participantLabel: string;
-  participantId: string;
-  fileName: string;
-  studyConfigId: string | null;
-  enabledModesLabel: string;
+export const MODE_COLORS: Record<Mode, string> = {
+  1: '#0369a1', // sky-700
+  2: '#b45309', // amber-700
+  3: '#047857', // emerald-700
+  4: '#7e22ce', // purple-700
+};
+
+export const ALL_MODES: readonly Mode[] = [1, 2, 3, 4];
+
+export type LearningBlockCell = {
   blockIndex: number;
-  totalFlashcards: number;
-  knowItCount: number;
-  knowItRate: number;
-  avgDurationSec: number | null;
-};
-
-export type AverageBlockTrendPoint = {
-  blockIndex: number;
-  participantCount: number;
-  knowItRate: number;
-  avgDurationSec: number | null;
-};
-
-export type ModeQuizSummary = {
   mode: Mode;
-  questionCount: number;
-  correctCount: number;
-  accuracy: number | null;
-  idkCount: number;
-  timeoutCount: number;
-  avgRtSec: number | null;
+  meanKnowItRate: number;
+  sem: number;
+  participantCount: number;
+  decisionCount: number;
 };
 
-export type AnalyzerOverallSummary = {
-  zipCount: number;
+export type LearningModeSummary = {
+  mode: Mode;
+  label: string;
   participantCount: number;
-  overallQuizAccuracy: number | null;
-  overallKnowItRate: number | null;
-  avgQuizRtSec: number | null;
-  idkCount: number;
-  timeoutCount: number;
+  totalDecisions: number;
+  firstBlockRate: number | null;
+  lastBlockRate: number | null;
+  delta: number | null;
+  slopePerBlock: number | null;
+};
+
+export type LearningData = {
+  cells: LearningBlockCell[];
+  summary: LearningModeSummary[];
+  blockIndices: number[];
+};
+
+export type RecallTimeModeData = {
+  mode: Mode;
+  label: string;
+  rtSec: number[];
+  mean: number | null;
+  sd: number | null;
+  median: number | null;
+  q1: number | null;
+  q3: number | null;
+  min: number | null;
+  max: number | null;
+  n: number;
+};
+
+export type AccuracyModeData = {
+  mode: Mode;
+  label: string;
+  correct: number;
+  incorrect: number;
+  idk: number;
+  timeout: number;
+  total: number;
+  accuracy: number | null;
+  ci95Lower: number | null;
+  ci95Upper: number | null;
 };
 
 export type AnalyzerBatch = {
   sessions: UploadedAnalysisSession[];
   failures: UploadFailure[];
-  uploads: UploadedSessionRow[];
-  participants: ParticipantSummary[];
-  blockTrend: BlockTrendPoint[];
-  averageBlockTrend: AverageBlockTrendPoint[];
-  modeQuiz: ModeQuizSummary[];
-  overall: AnalyzerOverallSummary;
-  warnings: string[];
+  participantCount: number;
+  learning: LearningData;
+  recallTime: RecallTimeModeData[];
+  accuracy: AccuracyModeData[];
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -131,20 +139,8 @@ function normalizeMode(value: unknown): Mode | null {
   return value === 1 || value === 2 || value === 3 || value === 4 ? value : null;
 }
 
-function round(value: number, digits = 2): number {
-  const scale = 10 ** digits;
-  return Math.round(value * scale) / scale;
-}
-
-export function formatEnabledModes(modes: readonly Mode[]): string {
-  if (modes.length === 0) return 'Unknown';
-  return modes.map((mode) => `Mode ${mode}`).join(', ');
-}
-
 function parseBlockIndex(blockLabel: unknown): number | null {
-  if (typeof blockLabel !== 'string' && typeof blockLabel !== 'number') {
-    return null;
-  }
+  if (typeof blockLabel !== 'string' && typeof blockLabel !== 'number') return null;
   const parsed = Number.parseInt(String(blockLabel), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
@@ -201,11 +197,14 @@ function inferBlockCount(events: SessionEvent[]): number {
   for (const event of events) {
     if (event.type !== 'flashcard.show') continue;
     const blockIndex = parseBlockIndex(event.blockLabel);
-    if (blockIndex !== null) {
-      maxBlock = Math.max(maxBlock, blockIndex);
-    }
+    if (blockIndex !== null) maxBlock = Math.max(maxBlock, blockIndex);
   }
   return maxBlock;
+}
+
+function formatEnabledModes(modes: readonly Mode[]): string {
+  if (modes.length === 0) return 'Unknown';
+  return modes.map((mode) => `Mode ${mode}`).join(', ');
 }
 
 function collectExposures(session: UploadedAnalysisSession): StudyExposure[] {
@@ -246,6 +245,7 @@ function collectQuizAttempts(session: UploadedAnalysisSession): QuizAttempt[] {
   for (const event of session.events) {
     if (event.type === 'quiz.answer') {
       attempts.push({
+        personId: event.personId,
         mode: session.modeAssignment[event.personId] ?? null,
         outcome: event.correct ? 'correct' : 'incorrect',
         rtMs: event.rtMs,
@@ -255,6 +255,7 @@ function collectQuizAttempts(session: UploadedAnalysisSession): QuizAttempt[] {
 
     if (event.type === 'quiz.idk') {
       attempts.push({
+        personId: event.personId,
         mode: session.modeAssignment[event.personId] ?? null,
         outcome: 'idk',
         rtMs: event.rtMs,
@@ -264,6 +265,7 @@ function collectQuizAttempts(session: UploadedAnalysisSession): QuizAttempt[] {
 
     if (event.type === 'quiz.timeout') {
       attempts.push({
+        personId: event.personId,
         mode: session.modeAssignment[event.personId] ?? null,
         outcome: 'timeout',
         rtMs: null,
@@ -274,158 +276,223 @@ function collectQuizAttempts(session: UploadedAnalysisSession): QuizAttempt[] {
   return attempts;
 }
 
-function average(numbers: number[]): number | null {
-  if (numbers.length === 0) return null;
-  return round(numbers.reduce((sum, value) => sum + value, 0) / numbers.length);
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null;
+  let sum = 0;
+  for (const value of values) sum += value;
+  return sum / values.length;
 }
 
-function buildParticipantSummary(
-  session: UploadedAnalysisSession,
-  participantLabel: string,
-): ParticipantSummary {
-  const exposures = collectExposures(session);
-  const attempts = collectQuizAttempts(session);
-
-  const knowItCount = exposures.filter((exposure) => exposure.bucket === 'know-it').length;
-  const correctCount = attempts.filter((attempt) => attempt.outcome === 'correct').length;
-  const idkCount = attempts.filter((attempt) => attempt.outcome === 'idk').length;
-  const timeoutCount = attempts.filter((attempt) => attempt.outcome === 'timeout').length;
-  const rtMsValues = attempts.flatMap((attempt) =>
-    attempt.rtMs === null ? [] : [attempt.rtMs / 1000],
-  );
-
-  return {
-    participantLabel,
-    participantId: session.participantId,
-    fileName: session.fileName,
-    studyConfigId: session.studyConfigId,
-    blockCount: session.blockCount,
-    enabledModesLabel: formatEnabledModes(session.enabledModes),
-    totalFlashcards: exposures.length,
-    overallKnowItRate: exposures.length > 0 ? round(knowItCount / exposures.length, 4) : null,
-    quizAccuracy: attempts.length > 0 ? round(correctCount / attempts.length, 4) : null,
-    questionCount: attempts.length,
-    correctCount,
-    idkCount,
-    timeoutCount,
-    avgQuizRtSec: average(rtMsValues),
-  };
+function stdDev(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const m = values.reduce((sum, v) => sum + v, 0) / values.length;
+  let sq = 0;
+  for (const value of values) sq += (value - m) * (value - m);
+  return Math.sqrt(sq / (values.length - 1));
 }
 
-function buildParticipantBlockTrend(
-  session: UploadedAnalysisSession,
-  participantLabel: string,
-): BlockTrendPoint[] {
-  const groups = new Map<number, StudyExposure[]>();
-  for (const exposure of collectExposures(session)) {
-    const current = groups.get(exposure.blockIndex) ?? [];
-    current.push(exposure);
-    groups.set(exposure.blockIndex, current);
+function percentile(sortedValues: number[], p: number): number | null {
+  if (sortedValues.length === 0) return null;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const idx = (sortedValues.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sortedValues[lo];
+  return sortedValues[lo] + (sortedValues[hi] - sortedValues[lo]) * (idx - lo);
+}
+
+function wilsonInterval(successes: number, trials: number, z = 1.96): [number, number] | null {
+  if (trials === 0) return null;
+  const p = successes / trials;
+  const denom = 1 + (z * z) / trials;
+  const center = p + (z * z) / (2 * trials);
+  const spread = z * Math.sqrt((p * (1 - p)) / trials + (z * z) / (4 * trials * trials));
+  return [Math.max(0, (center - spread) / denom), Math.min(1, (center + spread) / denom)];
+}
+
+// Simple linear regression slope using least squares.
+function linearSlope(xs: number[], ys: number[]): number | null {
+  const n = xs.length;
+  if (n < 2) return null;
+  const meanX = xs.reduce((s, v) => s + v, 0) / n;
+  const meanY = ys.reduce((s, v) => s + v, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - meanX) * (ys[i] - meanY);
+    den += (xs[i] - meanX) * (xs[i] - meanX);
+  }
+  if (den === 0) return null;
+  return num / den;
+}
+
+function buildLearningData(sessions: UploadedAnalysisSession[]): LearningData {
+  // For each (blockIndex, mode), collect per-participant know-it rates. We then
+  // report the mean and SEM across participants so each participant counts equally.
+  const rateBuckets = new Map<number, Map<Mode, number[]>>();
+  const decisionCounts = new Map<number, Map<Mode, number>>();
+
+  for (const session of sessions) {
+    const perParticipant = new Map<number, Map<Mode, { know: number; total: number }>>();
+    for (const exp of collectExposures(session)) {
+      if (exp.mode === null) continue;
+      let byMode = perParticipant.get(exp.blockIndex);
+      if (!byMode) {
+        byMode = new Map();
+        perParticipant.set(exp.blockIndex, byMode);
+      }
+      const cur = byMode.get(exp.mode) ?? { know: 0, total: 0 };
+      cur.total += 1;
+      if (exp.bucket === 'know-it') cur.know += 1;
+      byMode.set(exp.mode, cur);
+    }
+
+    for (const [blockIndex, byMode] of perParticipant) {
+      for (const [mode, counts] of byMode) {
+        if (counts.total === 0) continue;
+        const rate = counts.know / counts.total;
+
+        let rates = rateBuckets.get(blockIndex);
+        if (!rates) {
+          rates = new Map();
+          rateBuckets.set(blockIndex, rates);
+        }
+        const arr = rates.get(mode) ?? [];
+        arr.push(rate);
+        rates.set(mode, arr);
+
+        let dec = decisionCounts.get(blockIndex);
+        if (!dec) {
+          dec = new Map();
+          decisionCounts.set(blockIndex, dec);
+        }
+        dec.set(mode, (dec.get(mode) ?? 0) + counts.total);
+      }
+    }
   }
 
-  return Array.from(groups.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([blockIndex, exposures]) => {
-      const knowItCount = exposures.filter((exposure) => exposure.bucket === 'know-it').length;
-      const avgDurationSec = average(exposures.map((exposure) => exposure.durationMs / 1000));
-
-      return {
-        participantLabel,
-        participantId: session.participantId,
-        fileName: session.fileName,
-        studyConfigId: session.studyConfigId,
-        enabledModesLabel: formatEnabledModes(session.enabledModes),
+  const cells: LearningBlockCell[] = [];
+  const blockSet = new Set<number>();
+  for (const [blockIndex, byMode] of rateBuckets) {
+    blockSet.add(blockIndex);
+    for (const [mode, rates] of byMode) {
+      const m = rates.reduce((s, v) => s + v, 0) / rates.length;
+      const sd = stdDev(rates);
+      const sem = sd !== null ? sd / Math.sqrt(rates.length) : 0;
+      cells.push({
         blockIndex,
-        totalFlashcards: exposures.length,
-        knowItCount,
-        knowItRate: exposures.length > 0 ? round(knowItCount / exposures.length, 4) : 0,
-        avgDurationSec,
-      };
-    });
-}
-
-function buildAverageBlockTrend(points: BlockTrendPoint[]): AverageBlockTrendPoint[] {
-  const groups = new Map<number, BlockTrendPoint[]>();
-  for (const point of points) {
-    const current = groups.get(point.blockIndex) ?? [];
-    current.push(point);
-    groups.set(point.blockIndex, current);
+        mode,
+        meanKnowItRate: m,
+        sem,
+        participantCount: rates.length,
+        decisionCount: decisionCounts.get(blockIndex)?.get(mode) ?? 0,
+      });
+    }
   }
+  cells.sort((a, b) => a.blockIndex - b.blockIndex || a.mode - b.mode);
 
-  return Array.from(groups.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([blockIndex, entries]) => ({
-      blockIndex,
-      participantCount: entries.length,
-      knowItRate: round(
-        entries.reduce((sum, entry) => sum + entry.knowItRate, 0) / entries.length,
-        4,
-      ),
-      avgDurationSec: average(
-        entries.flatMap((entry) => (entry.avgDurationSec === null ? [] : [entry.avgDurationSec])),
-      ),
-    }));
+  const blockIndices = Array.from(blockSet).sort((a, b) => a - b);
+
+  const summary: LearningModeSummary[] = ALL_MODES.map((mode) => {
+    const modeCells = cells
+      .filter((c) => c.mode === mode)
+      .sort((a, b) => a.blockIndex - b.blockIndex);
+    if (modeCells.length === 0) {
+      return {
+        mode,
+        label: MODE_LABELS[mode],
+        participantCount: 0,
+        totalDecisions: 0,
+        firstBlockRate: null,
+        lastBlockRate: null,
+        delta: null,
+        slopePerBlock: null,
+      };
+    }
+    const first = modeCells[0];
+    const last = modeCells[modeCells.length - 1];
+    const totalDecisions = modeCells.reduce((s, c) => s + c.decisionCount, 0);
+    const maxParticipants = modeCells.reduce((m, c) => Math.max(m, c.participantCount), 0);
+    const xs = modeCells.map((c) => c.blockIndex);
+    const ys = modeCells.map((c) => c.meanKnowItRate);
+    return {
+      mode,
+      label: MODE_LABELS[mode],
+      participantCount: maxParticipants,
+      totalDecisions,
+      firstBlockRate: first.meanKnowItRate,
+      lastBlockRate: last.meanKnowItRate,
+      delta: last.meanKnowItRate - first.meanKnowItRate,
+      slopePerBlock: linearSlope(xs, ys),
+    };
+  });
+
+  return { cells, summary, blockIndices };
 }
 
-function buildModeQuizSummary(sessions: UploadedAnalysisSession[]): ModeQuizSummary[] {
-  const groups = new Map<Mode, QuizAttempt[]>();
+function buildRecallTime(sessions: UploadedAnalysisSession[]): RecallTimeModeData[] {
+  const byMode = new Map<Mode, number[]>();
 
   for (const session of sessions) {
     for (const attempt of collectQuizAttempts(session)) {
       if (attempt.mode === null) continue;
-      const current = groups.get(attempt.mode) ?? [];
-      current.push(attempt);
-      groups.set(attempt.mode, current);
+      if (attempt.outcome !== 'correct' && attempt.outcome !== 'incorrect') continue;
+      if (attempt.rtMs === null) continue;
+      const arr = byMode.get(attempt.mode) ?? [];
+      arr.push(attempt.rtMs / 1000);
+      byMode.set(attempt.mode, arr);
     }
   }
 
-  return Array.from(groups.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([mode, attempts]) => {
-      const correctCount = attempts.filter((attempt) => attempt.outcome === 'correct').length;
-      const idkCount = attempts.filter((attempt) => attempt.outcome === 'idk').length;
-      const timeoutCount = attempts.filter((attempt) => attempt.outcome === 'timeout').length;
-      const rtMsValues = attempts.flatMap((attempt) =>
-        attempt.rtMs === null ? [] : [attempt.rtMs / 1000],
-      );
-
-      return {
-        mode,
-        questionCount: attempts.length,
-        correctCount,
-        accuracy: attempts.length > 0 ? round(correctCount / attempts.length, 4) : null,
-        idkCount,
-        timeoutCount,
-        avgRtSec: average(rtMsValues),
-      };
-    });
+  return ALL_MODES.map((mode) => {
+    const arr = byMode.get(mode) ?? [];
+    const sorted = arr.slice().sort((a, b) => a - b);
+    return {
+      mode,
+      label: MODE_LABELS[mode],
+      rtSec: sorted,
+      mean: mean(sorted),
+      sd: stdDev(sorted),
+      median: percentile(sorted, 0.5),
+      q1: percentile(sorted, 0.25),
+      q3: percentile(sorted, 0.75),
+      min: sorted.length > 0 ? sorted[0] : null,
+      max: sorted.length > 0 ? sorted[sorted.length - 1] : null,
+      n: sorted.length,
+    };
+  });
 }
 
-function buildWarnings(sessions: UploadedAnalysisSession[]): string[] {
-  if (sessions.length === 0) return [];
+function buildAccuracy(sessions: UploadedAnalysisSession[]): AccuracyModeData[] {
+  const counts = new Map<Mode, { correct: number; incorrect: number; idk: number; timeout: number }>();
 
-  const modeSets = new Set(
-    sessions
-      .map((session) => session.enabledModes.join(','))
-      .filter((value) => value.length > 0),
-  );
-  const blockCounts = new Set(
-    sessions.map((session) => session.blockCount).filter((value) => value > 0),
-  );
-
-  const warnings: string[] = [];
-  if (modeSets.size > 1) {
-    warnings.push(
-      'Uploads use different enabled mode sets. Aggregates are merged across all uploaded sessions.',
-    );
-  }
-  if (blockCounts.size > 1) {
-    warnings.push(
-      'Uploads use different flashcard block counts. Block-level averages only include participants with data for each block.',
-    );
+  for (const session of sessions) {
+    for (const attempt of collectQuizAttempts(session)) {
+      if (attempt.mode === null) continue;
+      const cur = counts.get(attempt.mode) ?? { correct: 0, incorrect: 0, idk: 0, timeout: 0 };
+      cur[attempt.outcome] += 1;
+      counts.set(attempt.mode, cur);
+    }
   }
 
-  return warnings;
+  return ALL_MODES.map((mode) => {
+    const c = counts.get(mode) ?? { correct: 0, incorrect: 0, idk: 0, timeout: 0 };
+    const total = c.correct + c.incorrect + c.idk + c.timeout;
+    const accuracy = total > 0 ? c.correct / total : null;
+    const ci = total > 0 ? wilsonInterval(c.correct, total) : null;
+    return {
+      mode,
+      label: MODE_LABELS[mode],
+      correct: c.correct,
+      incorrect: c.incorrect,
+      idk: c.idk,
+      timeout: c.timeout,
+      total,
+      accuracy,
+      ci95Lower: ci ? ci[0] : null,
+      ci95Upper: ci ? ci[1] : null,
+    };
+  });
 }
 
 function escapeCell(value: unknown): string {
@@ -511,8 +578,7 @@ export async function parseResultZip(file: File): Promise<UploadedAnalysisSessio
       : extractModeAssignment(startEvent?.modeAssignment);
   const people =
     (payload ? extractPeople(payload.people) : null) ?? extractPeople(startEvent?.people);
-  const normalizedPeople =
-    people.length > 0 ? people : extractPeople(startEvent?.people);
+  const normalizedPeople = people.length > 0 ? people : extractPeople(startEvent?.people);
   const blockCount = startEvent?.blockCount ?? inferBlockCount(events);
   const enabledModes = uniqueSortedModes(
     startEvent?.enabledModes ?? Object.values(normalizedModeAssignment),
@@ -536,121 +602,77 @@ export function buildAnalyzerBatch(
   sessions: UploadedAnalysisSession[],
   failures: UploadFailure[],
 ): AnalyzerBatch {
-  const uploads = sessions.map((session, index) => ({
-    participantLabel: `P${String(index + 1).padStart(2, '0')}`,
-    participantId: session.participantId,
-    fileName: session.fileName,
-    fileSizeKb: round(session.fileSize / 1024, 1),
-    studyConfigId: session.studyConfigId,
-    blockCount: session.blockCount,
-    enabledModesLabel: session.modeSignature,
-  }));
-
-  const participants = sessions.map((session, index) =>
-    buildParticipantSummary(session, uploads[index].participantLabel),
-  );
-
-  const blockTrend = sessions.flatMap((session, index) =>
-    buildParticipantBlockTrend(session, uploads[index].participantLabel),
-  );
-
-  const quizAttempts = sessions.flatMap((session) => collectQuizAttempts(session));
-  const exposures = sessions.flatMap((session) => collectExposures(session));
-  const averageBlockTrend = buildAverageBlockTrend(blockTrend);
-  const correctCount = quizAttempts.filter((attempt) => attempt.outcome === 'correct').length;
-  const idkCount = quizAttempts.filter((attempt) => attempt.outcome === 'idk').length;
-  const timeoutCount = quizAttempts.filter((attempt) => attempt.outcome === 'timeout').length;
-  const knowItCount = exposures.filter((exposure) => exposure.bucket === 'know-it').length;
-
   return {
     sessions,
     failures,
-    uploads,
-    participants,
-    blockTrend,
-    averageBlockTrend,
-    modeQuiz: buildModeQuizSummary(sessions),
-    overall: {
-      zipCount: sessions.length + failures.length,
-      participantCount: sessions.length,
-      overallQuizAccuracy:
-        quizAttempts.length > 0 ? round(correctCount / quizAttempts.length, 4) : null,
-      overallKnowItRate: exposures.length > 0 ? round(knowItCount / exposures.length, 4) : null,
-      avgQuizRtSec: average(
-        quizAttempts.flatMap((attempt) =>
-          attempt.rtMs === null ? [] : [attempt.rtMs / 1000],
-        ),
-      ),
-      idkCount,
-      timeoutCount,
-    },
-    warnings: buildWarnings(sessions),
+    participantCount: sessions.length,
+    learning: buildLearningData(sessions),
+    recallTime: buildRecallTime(sessions),
+    accuracy: buildAccuracy(sessions),
   };
 }
 
 export async function exportAnalyzerBatch(batch: AnalyzerBatch): Promise<void> {
-  const participantsRows = batch.participants.map((participant) => ({
-    participantLabel: participant.participantLabel,
-    participantId: participant.participantId,
-    fileName: participant.fileName,
-    studyConfigId: participant.studyConfigId ?? '',
-    blockCount: participant.blockCount,
-    enabledModes: participant.enabledModesLabel,
-    totalFlashcards: participant.totalFlashcards,
-    overallKnowItRate: participant.overallKnowItRate,
-    quizAccuracy: participant.quizAccuracy,
-    questionCount: participant.questionCount,
-    correctCount: participant.correctCount,
-    idkCount: participant.idkCount,
-    timeoutCount: participant.timeoutCount,
-    avgQuizRtSec: participant.avgQuizRtSec,
+  const learningRows = batch.learning.cells.map((c) => ({
+    mode: c.mode,
+    modeLabel: MODE_LABELS[c.mode],
+    blockIndex: c.blockIndex,
+    meanKnowItRate: c.meanKnowItRate,
+    sem: c.sem,
+    participantCount: c.participantCount,
+    decisionCount: c.decisionCount,
   }));
 
-  const blockRows = [
-    ...batch.blockTrend.map((point) => ({
-      seriesType: 'participant',
-      participantLabel: point.participantLabel,
-      participantId: point.participantId,
-      fileName: point.fileName,
-      studyConfigId: point.studyConfigId ?? '',
-      enabledModes: point.enabledModesLabel,
-      blockIndex: point.blockIndex,
-      participantCount: '',
-      totalFlashcards: point.totalFlashcards,
-      knowItCount: point.knowItCount,
-      knowItRate: point.knowItRate,
-      avgDurationSec: point.avgDurationSec,
-    })),
-    ...batch.averageBlockTrend.map((point) => ({
-      seriesType: 'average',
-      participantLabel: 'Average',
-      participantId: '',
-      fileName: '',
-      studyConfigId: '',
-      enabledModes: '',
-      blockIndex: point.blockIndex,
-      participantCount: point.participantCount,
-      totalFlashcards: '',
-      knowItCount: '',
-      knowItRate: point.knowItRate,
-      avgDurationSec: point.avgDurationSec,
-    })),
-  ];
+  const learningSummaryRows = batch.learning.summary.map((s) => ({
+    mode: s.mode,
+    modeLabel: s.label,
+    participantCount: s.participantCount,
+    totalDecisions: s.totalDecisions,
+    firstBlockRate: s.firstBlockRate,
+    lastBlockRate: s.lastBlockRate,
+    deltaFirstToLast: s.delta,
+    slopePerBlock: s.slopePerBlock,
+  }));
 
-  const modeRows = batch.modeQuiz.map((row) => ({
-    mode: row.mode,
-    questionCount: row.questionCount,
-    correctCount: row.correctCount,
-    accuracy: row.accuracy,
-    idkCount: row.idkCount,
-    timeoutCount: row.timeoutCount,
-    avgRtSec: row.avgRtSec,
+  const recallTrialRows: Array<{ mode: Mode; modeLabel: string; rtSec: number }> = [];
+  for (const m of batch.recallTime) {
+    for (const rt of m.rtSec) {
+      recallTrialRows.push({ mode: m.mode, modeLabel: m.label, rtSec: rt });
+    }
+  }
+
+  const recallSummaryRows = batch.recallTime.map((m) => ({
+    mode: m.mode,
+    modeLabel: m.label,
+    n: m.n,
+    mean: m.mean,
+    sd: m.sd,
+    median: m.median,
+    q1: m.q1,
+    q3: m.q3,
+    min: m.min,
+    max: m.max,
+  }));
+
+  const accuracyRows = batch.accuracy.map((a) => ({
+    mode: a.mode,
+    modeLabel: a.label,
+    correct: a.correct,
+    incorrect: a.incorrect,
+    idk: a.idk,
+    timeout: a.timeout,
+    total: a.total,
+    accuracy: a.accuracy,
+    ci95Lower: a.ci95Lower,
+    ci95Upper: a.ci95Upper,
   }));
 
   const zip = new JSZip();
-  zip.file('participants_summary.csv', toCsv(participantsRows));
-  zip.file('block_trend.csv', toCsv(blockRows));
-  zip.file('mode_quiz_summary.csv', toCsv(modeRows));
+  zip.file('learning_rate_by_block.csv', toCsv(learningRows));
+  zip.file('learning_rate_summary.csv', toCsv(learningSummaryRows));
+  zip.file('recall_time_trials.csv', toCsv(recallTrialRows));
+  zip.file('recall_time_summary.csv', toCsv(recallSummaryRows));
+  zip.file('testing_accuracy.csv', toCsv(accuracyRows));
 
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
