@@ -453,6 +453,14 @@ function formatEta(value: number): string {
   return clamped.toFixed(2).replace(/^0/, '');
 }
 
+function interpretP(p: number): string {
+  if (!Number.isFinite(p)) return '--';
+  if (p < 0.001) return 'very significant';
+  if (p < 0.05) return 'significant';
+  if (p < 0.10) return 'marginal';
+  return 'not significant';
+}
+
 function anovaUnavailableReason(anova: Extract<AnovaOutput, { ok: false }>): string {
   switch (anova.info.reason) {
     case 'no-complete-cases':
@@ -490,7 +498,8 @@ function AnovaBlock({ anova }: { anova: AnovaOutput }) {
             <th className="py-1 font-medium">Effect</th>
             <th className="py-1 text-right font-medium">F</th>
             <th className="py-1 text-right font-medium">p</th>
-            <th className="py-1 text-right font-medium">ηp²</th>
+            <th className="py-1 text-right font-medium">ges</th>
+            <th className="py-1 font-medium">Interpretation</th>
           </tr>
         </thead>
         <tbody>
@@ -500,7 +509,10 @@ function AnovaBlock({ anova }: { anova: AnovaOutput }) {
               <td className="py-2 text-right tabular-nums">{formatF(e.F)}</td>
               <td className="py-2 text-right tabular-nums">{formatP(e.p)}</td>
               <td className="py-2 text-right tabular-nums">
-                {formatEta(e.partialEtaSq)}
+                {formatEta(e.generalizedEtaSq)}
+              </td>
+              <td className="py-2 whitespace-nowrap text-[12px] text-neutral-600">
+                {interpretP(e.p)}
               </td>
             </tr>
           ))}

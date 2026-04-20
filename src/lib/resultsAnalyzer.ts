@@ -132,7 +132,7 @@ export type AnovaEffect = {
   df1: number;
   df2: number;
   p: number;
-  partialEtaSq: number;
+  generalizedEtaSq: number;
 };
 
 export type AnovaResult = {
@@ -751,14 +751,20 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
   const pModality = fPValue(Fmodality, dfModality, dfErrorWithin);
   const pInteraction = fPValue(Finteraction, dfInteraction, dfErrorWithin);
 
-  const etaGroup =
-    SSgroup + SSsubjWithin > 0 ? SSgroup / (SSgroup + SSsubjWithin) : 0;
-  const etaModality =
-    SSmodality + SSerrorWithin > 0 ? SSmodality / (SSmodality + SSerrorWithin) : 0;
-  const etaInteraction =
-    SSinteraction + SSerrorWithin > 0
-      ? SSinteraction / (SSinteraction + SSerrorWithin)
-      : 0;
+  // Generalized eta-squared (Olejnik & Algina 2003, Bakeman 2005).
+  // For a mixed 2x2 design with one between factor (Group) and one within
+  // factor (Modality), every "measured" effect pools both the between-subject
+  // error (SS_subjWithin) and the within-subject error (SS_errorWithin) in the
+  // denominator — identical across all three effects, only the effect SS in
+  // the numerator (and the leading term of the denominator) changes.
+  const denominatorCommon = SSsubjWithin + SSerrorWithin;
+  const gesDenomGroup = SSgroup + denominatorCommon;
+  const gesDenomModality = SSmodality + denominatorCommon;
+  const gesDenomInteraction = SSinteraction + denominatorCommon;
+  const gesGroup = gesDenomGroup > 0 ? SSgroup / gesDenomGroup : 0;
+  const gesModality = gesDenomModality > 0 ? SSmodality / gesDenomModality : 0;
+  const gesInteraction =
+    gesDenomInteraction > 0 ? SSinteraction / gesDenomInteraction : 0;
 
   return {
     ok: true,
@@ -770,7 +776,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
           df1: dfGroup,
           df2: dfSubjWithin,
           p: pGroup,
-          partialEtaSq: etaGroup,
+          generalizedEtaSq: gesGroup,
         },
         {
           name: 'Modality',
@@ -778,7 +784,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
           df1: dfModality,
           df2: dfErrorWithin,
           p: pModality,
-          partialEtaSq: etaModality,
+          generalizedEtaSq: gesModality,
         },
         {
           name: 'Group × Modality',
@@ -786,7 +792,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
           df1: dfInteraction,
           df2: dfErrorWithin,
           p: pInteraction,
-          partialEtaSq: etaInteraction,
+          generalizedEtaSq: gesInteraction,
         },
       ],
       nCue,
