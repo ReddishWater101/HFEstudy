@@ -60,11 +60,14 @@ export const MODE_SHORT_LABELS: Record<Mode, string> = {
   4: 'NP+A',
 };
 
+// Synced with DV2/DV3's Cue/NoCue palette. Text modes are ~12% darker than
+// their Audio sibling (same hue, lower value) so the four lines on DV1 stay
+// distinguishable without breaking the group coding.
 export const MODE_COLORS: Record<Mode, string> = {
-  1: '#0369a1', // sky-700
-  2: '#b45309', // amber-700
-  3: '#047857', // emerald-700
-  4: '#7e22ce', // purple-700
+  1: '#DA6860', // P+T  — Cue (salmon), Text: 12% darker
+  2: '#F8766D', // P+A  — Cue (salmon), Audio
+  3: '#00A8AC', // NP+T — NoCue (teal), Text: 12% darker
+  4: '#00BFC4', // NP+A — NoCue (teal), Audio
 };
 
 export const ALL_MODES: readonly Mode[] = [1, 2, 3, 4];
@@ -127,7 +130,7 @@ export type AccuracyModeData = {
 };
 
 export type AnovaEffect = {
-  name: 'Group' | 'Modality' | 'G × M';
+  name: 'Cue' | 'Modality' | 'C × M';
   F: number;
   df1: number;
   df2: number;
@@ -771,7 +774,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
     result: {
       effects: [
         {
-          name: 'Group',
+          name: 'Cue',
           F: Fgroup,
           df1: dfGroup,
           df2: dfSubjWithin,
@@ -787,7 +790,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
           generalizedEtaSq: gesModality,
         },
         {
-          name: 'G × M',
+          name: 'C × M',
           F: Finteraction,
           df1: dfInteraction,
           df2: dfErrorWithin,
