@@ -59,11 +59,12 @@ export function AccuracyChart({ data }: { data: AccuracyModeData[] }) {
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex-1 overflow-x-auto">
+        <div className="min-w-0 flex-1">
           {hasData ? (
             <svg
               viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-              className="h-[360px] min-w-[680px] w-full"
+              preserveAspectRatio="xMidYMid meet"
+              className="h-auto w-full"
               role="img"
               aria-label="Stacked bar chart of quiz outcomes per mode"
             >
@@ -408,7 +409,7 @@ function StatsTable({ data }: { data: AccuracyModeData[] }) {
               </td>
               <td className="py-2 text-right tabular-nums text-neutral-500">
                 {row.ci95Lower !== null && row.ci95Upper !== null
-                  ? `${formatPercent(row.ci95Lower, 0)}-${formatPercent(row.ci95Upper, 0)}`
+                  ? `${formatPercent(row.ci95Lower, 0)}–${formatPercent(row.ci95Upper, 0)}`
                   : '--'}
               </td>
               <td className="py-2 text-right tabular-nums">{row.total || '--'}</td>

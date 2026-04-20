@@ -9,8 +9,20 @@ import {
 
 const WIDTH = 760;
 const HEIGHT = 360;
-const PADDING = { top: 24, right: 28, bottom: 56, left: 56 };
-const Y_TICKS = [0, 0.25, 0.5, 0.75, 1];
+const PADDING = { top: 24, right: 28, bottom: 56, left: 60 };
+
+function niceMax(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+  const normalized = raw / magnitude;
+  let nice: number;
+  if (normalized <= 1) nice = 1;
+  else if (normalized <= 2) nice = 2;
+  else if (normalized <= 2.5) nice = 2.5;
+  else if (normalized <= 5) nice = 5;
+  else nice = 10;
+  return nice * magnitude;
+}
 
 function xForBlock(blockIndex: number, minBlock: number, maxBlock: number): number {
   const chartWidth = WIDTH - PADDING.left - PADDING.right;
@@ -18,28 +30,27 @@ function xForBlock(blockIndex: number, minBlock: number, maxBlock: number): numb
   return PADDING.left + ((blockIndex - minBlock) / (maxBlock - minBlock)) * chartWidth;
 }
 
-function yForRate(rate: number): number {
+function yForValue(value: number, maxValue: number): number {
   const chartHeight = HEIGHT - PADDING.top - PADDING.bottom;
-  return PADDING.top + (1 - Math.max(0, Math.min(1, rate))) * chartHeight;
+  const clamped = Math.max(0, Math.min(maxValue, value));
+  return PADDING.top + (1 - clamped / maxValue) * chartHeight;
 }
 
-function formatPercent(value: number | null, digits = 0): string {
+function formatExposures(value: number | null, digits = 1): string {
   if (value === null || Number.isNaN(value)) return '--';
-  return `${(value * 100).toFixed(digits)}%`;
+  return value.toFixed(digits);
 }
 
-function formatSignedPercent(value: number | null): string {
+function formatSigned(value: number | null, digits = 1): string {
   if (value === null || Number.isNaN(value)) return '--';
-  const pct = value * 100;
-  const sign = pct > 0 ? '+' : '';
-  return `${sign}${pct.toFixed(1)}%`;
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(digits)}`;
 }
 
 function formatSlope(value: number | null): string {
   if (value === null || Number.isNaN(value)) return '--';
-  const pct = value * 100;
-  const sign = pct > 0 ? '+' : '';
-  return `${sign}${pct.toFixed(1)}%/block`;
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}/blk`;
 }
 
 export function LearningRateChart({ data }: { data: LearningData }) {
@@ -48,6 +59,13 @@ export function LearningRateChart({ data }: { data: LearningData }) {
   const minBlock = hasData ? data.blockIndices[0] : 1;
   const maxBlock = hasData ? data.blockIndices[data.blockIndices.length - 1] : 1;
 
+  // Auto-scale y-axis to the highest (mean + SEM) observed. Padding for breathing room.
+  const observedMax = hasData
+    ? Math.max(...data.cells.map((c) => c.meanExposures + c.sem))
+    : 1;
+  const chartMax = niceMax(Math.max(observedMax * 1.1, 1));
+  const tickValues = [0, chartMax / 4, chartMax / 2, (chartMax * 3) / 4, chartMax];
+
   return (
     <section className="flex flex-col gap-3 bg-white px-6 py-6">
       <header className="flex flex-col gap-1">
@@ -55,28 +73,32 @@ export function LearningRateChart({ data }: { data: LearningData }) {
           Dependent variable 1
         </span>
         <h3 className="font-display text-2xl leading-none text-neutral-900">
-          Learning rate by block
+          Exposures until &quot;I know it&quot;
         </h3>
         <p className="max-w-3xl text-sm text-neutral-500">
-          Mean know-it rate across participants, per flashcard block. One line per mode,
-          shaded band is +/-1 SEM across participants. Higher and steeper is better.
+          Within each block, how many flashcard exposures a face takes before the
+          participant first buckets it as &quot;know-it&quot;. Shown per mode across
+          blocks &mdash; <span className="font-medium">lower is faster learning</span>.
+          Shaded band is +/-1 SEM across participants. Faces never rated
+          &quot;know-it&quot; in a block contribute no sample.
         </p>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex-1 overflow-x-auto">
+        <div className="min-w-0 flex-1">
           {hasData ? (
             <svg
               viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-              className="h-[360px] min-w-[680px] w-full"
+              preserveAspectRatio="xMidYMid meet"
+              className="h-auto w-full"
               role="img"
-              aria-label="Learning rate by flashcard block, one line per mode"
+              aria-label="Mean exposures until know-it per block, one line per mode"
             >
               {/* y grid + labels */}
-              {Y_TICKS.map((tick) => {
-                const y = yForRate(tick);
+              {tickValues.map((tick, i) => {
+                const y = yForValue(tick, chartMax);
                 return (
-                  <g key={tick}>
+                  <g key={i}>
                     <line
                       x1={PADDING.left}
                       x2={WIDTH - PADDING.right}
@@ -91,7 +113,7 @@ export function LearningRateChart({ data }: { data: LearningData }) {
                       textAnchor="end"
                       className="fill-neutral-400 text-[11px]"
                     >
-                      {Math.round(tick * 100)}%
+                      {tick.toFixed(chartMax < 5 ? 1 : 0)}
                     </text>
                   </g>
                 );
@@ -124,15 +146,15 @@ export function LearningRateChart({ data }: { data: LearningData }) {
 
               {/* axis labels */}
               <text
-                x={PADDING.left - 40}
+                x={PADDING.left - 44}
                 y={PADDING.top + (HEIGHT - PADDING.top - PADDING.bottom) / 2}
                 textAnchor="middle"
-                transform={`rotate(-90, ${PADDING.left - 40}, ${
+                transform={`rotate(-90, ${PADDING.left - 44}, ${
                   PADDING.top + (HEIGHT - PADDING.top - PADDING.bottom) / 2
                 })`}
                 className="fill-neutral-500 text-[11px]"
               >
-                Know-it rate
+                Mean exposures to know-it
               </text>
               <text
                 x={PADDING.left + (WIDTH - PADDING.left - PADDING.right) / 2}
@@ -151,6 +173,7 @@ export function LearningRateChart({ data }: { data: LearningData }) {
                   cells={data.cells.filter((c) => c.mode === mode)}
                   minBlock={minBlock}
                   maxBlock={maxBlock}
+                  chartMax={chartMax}
                 />
               ))}
             </svg>
@@ -174,22 +197,23 @@ function ModeSeries({
   cells,
   minBlock,
   maxBlock,
+  chartMax,
 }: {
   mode: Mode;
   cells: LearningBlockCell[];
   minBlock: number;
   maxBlock: number;
+  chartMax: number;
 }) {
   if (cells.length === 0) return null;
 
   const sorted = cells.slice().sort((a, b) => a.blockIndex - b.blockIndex);
   const color = MODE_COLORS[mode];
 
-  // Shaded SEM band as a closed path (upper edge forward, lower edge backward).
   const upper = sorted
     .map((cell) => {
       const x = xForBlock(cell.blockIndex, minBlock, maxBlock);
-      const y = yForRate(cell.meanKnowItRate + cell.sem);
+      const y = yForValue(cell.meanExposures + cell.sem, chartMax);
       return `${x},${y}`;
     })
     .join(' ');
@@ -198,7 +222,7 @@ function ModeSeries({
     .reverse()
     .map((cell) => {
       const x = xForBlock(cell.blockIndex, minBlock, maxBlock);
-      const y = yForRate(cell.meanKnowItRate - cell.sem);
+      const y = yForValue(Math.max(0, cell.meanExposures - cell.sem), chartMax);
       return `${x},${y}`;
     })
     .join(' ');
@@ -207,7 +231,7 @@ function ModeSeries({
   const linePath = sorted
     .map((cell, index) => {
       const x = xForBlock(cell.blockIndex, minBlock, maxBlock);
-      const y = yForRate(cell.meanKnowItRate);
+      const y = yForValue(cell.meanExposures, chartMax);
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
     })
     .join(' ');
@@ -220,17 +244,16 @@ function ModeSeries({
         <circle
           key={cell.blockIndex}
           cx={xForBlock(cell.blockIndex, minBlock, maxBlock)}
-          cy={yForRate(cell.meanKnowItRate)}
+          cy={yForValue(cell.meanExposures, chartMax)}
           r="4"
           fill={color}
           stroke="#ffffff"
           strokeWidth="1.25"
         >
           <title>
-            {`${MODE_LABELS[mode]} - Block ${cell.blockIndex} - ${formatPercent(
-              cell.meanKnowItRate,
-              1,
-            )} (+/-${formatPercent(cell.sem, 1)}) - n=${cell.participantCount}`}
+            {`${MODE_LABELS[mode]} - Block ${cell.blockIndex} - ${formatExposures(
+              cell.meanExposures,
+            )} exposures (+/-${formatExposures(cell.sem, 2)} SEM) - n=${cell.participantCount}, samples=${cell.sampleCount}`}
           </title>
         </circle>
       ))}
@@ -259,17 +282,13 @@ function Legend() {
 
 function EmptyState() {
   return (
-    <div className="flex h-[300px] items-center justify-center border border-dashed border-neutral-200 text-sm text-neutral-400">
-      No flashcard bucket data yet.
+    <div className="flex h-[220px] items-center justify-center border border-dashed border-neutral-200 text-sm text-neutral-400">
+      No know-it buckets recorded yet.
     </div>
   );
 }
 
-function StatsTable({
-  summary,
-}: {
-  summary: LearningData['summary'];
-}) {
+function StatsTable({ summary }: { summary: LearningData['summary'] }) {
   return (
     <div className="flex flex-col gap-3">
       <h4 className="text-xs uppercase tracking-widest text-neutral-400">
@@ -300,13 +319,13 @@ function StatsTable({
                 </span>
               </td>
               <td className="py-2 text-right tabular-nums">
-                {formatPercent(row.firstBlockRate)}
+                {formatExposures(row.firstBlockMean)}
               </td>
               <td className="py-2 text-right tabular-nums">
-                {formatPercent(row.lastBlockRate)}
+                {formatExposures(row.lastBlockMean)}
               </td>
               <td className="py-2 text-right tabular-nums">
-                {formatSignedPercent(row.delta)}
+                {formatSigned(row.delta)}
               </td>
               <td className="py-2 text-right tabular-nums">
                 {formatSlope(row.slopePerBlock)}
@@ -319,8 +338,9 @@ function StatsTable({
         </tbody>
       </table>
       <p className="text-[11px] leading-snug text-neutral-400">
-        n = participants with any data in this mode. Slope is the linear-regression
-        slope of mean know-it rate versus block index.
+        Values are mean exposures before first &quot;know-it&quot;. Negative &Delta;
+        and slope = learning sped up across blocks. n = participants contributing to
+        this mode.
       </p>
     </div>
   );

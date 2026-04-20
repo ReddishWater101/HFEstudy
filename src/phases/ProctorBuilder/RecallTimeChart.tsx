@@ -23,9 +23,10 @@ function niceMax(raw: number): number {
   return nice * magnitude;
 }
 
-// Deterministic jitter so dots don't jump between renders.
-function jitterOffset(index: number, spread: number): number {
-  const pseudo = Math.sin(index * 12.9898) * 43758.5453;
+// Deterministic jitter so dots don't jump between renders. Seeds with the mode
+// as well as the trial index so the four columns don't share the same pattern.
+function jitterOffset(mode: Mode, index: number, spread: number): number {
+  const pseudo = Math.sin(mode * 928.37 + index * 12.9898) * 43758.5453;
   const normalized = pseudo - Math.floor(pseudo);
   return (normalized - 0.5) * 2 * spread;
 }
@@ -78,11 +79,12 @@ export function RecallTimeChart({ data }: { data: RecallTimeModeData[] }) {
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="flex-1 overflow-x-auto">
+        <div className="min-w-0 flex-1">
           {hasData ? (
             <svg
               viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-              className="h-[360px] min-w-[680px] w-full"
+              preserveAspectRatio="xMidYMid meet"
+              className="h-auto w-full"
               role="img"
               aria-label="Box and strip plot of recall time per mode"
             >
@@ -210,7 +212,7 @@ function ModeColumn({
   const stripDots = rtSec.map((value, index) => (
     <circle
       key={index}
-      cx={xCenter + jitterOffset(index, stripHalf)}
+      cx={xCenter + jitterOffset(mode, index, stripHalf)}
       cy={yForValue(value, chartMax)}
       r="2.5"
       fill={color}
