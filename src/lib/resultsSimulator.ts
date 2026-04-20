@@ -19,9 +19,9 @@ type Baselines = {
 // on both accuracy and recall time).
 const MODE_BASELINES: Record<Mode, Baselines> = {
   1: { accuracy: 0.94, rtMeanSec: 2.93, rtSdSec: 1.89, knowItHazard: [0.7619, 0.7000, 0.3333, 0.0000] },
-  2: { accuracy: 0.97, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.7619, 0.5000, 0.2000, 0.0000] },
+  2: { accuracy: 0.98, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.7619, 0.5000, 0.2000, 0.0000] },
   3: { accuracy: 0.88, rtMeanSec: 3.80, rtSdSec: 2.55, knowItHazard: [0.5476, 0.6842, 0.1667, 0.4000] },
-  4: { accuracy: 0.93, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.4762, 0.5909, 0.6667, 0.3333] },
+  4: { accuracy: 0.94, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.4762, 0.5909, 0.6667, 0.3333] },
 };
 
 // Latent participant skill: each simulated participant draws a z-score that
