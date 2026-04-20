@@ -10,15 +10,18 @@ type Baselines = {
   knowItHazard: number[];  // per-exposure hazard: p(first-know-it at k | not yet)
 };
 
-// Extrapolated from docs/imageA.png (learning curves), imageB.png (recall-time),
-// and imageC.png (accuracy). These are the *shape* of what a real batch looks
-// like. When the user loads the generated ZIPs back into the analyzer, the
-// resulting charts should broadly resemble those images.
+// Shape extrapolated from docs/imageA.png (learning curves), imageB.png
+// (recall-time), and imageC.png (accuracy). Adjusted so audio is always
+// easier to learn than text within the same phrase cohort:
+//   Mode 2 (P+A)  dominates Mode 1 (P+T)  at every exposure
+//   Mode 4 (NP+A) dominates Mode 3 (NP+T) at every exposure
+// This also keeps the phrase-vs-no-phrase direction intact (phrase > no-phrase
+// on both accuracy and recall time).
 const MODE_BASELINES: Record<Mode, Baselines> = {
   1: { accuracy: 0.94, rtMeanSec: 2.93, rtSdSec: 1.89, knowItHazard: [0.62, 0.61, 0.53, 0.35] },
-  2: { accuracy: 0.97, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.73, 0.30, 0.30, 0.30] },
+  2: { accuracy: 0.97, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.75, 0.65, 0.55, 0.45] },
   3: { accuracy: 0.88, rtMeanSec: 3.80, rtSdSec: 2.55, knowItHazard: [0.55, 0.40, 0.45, 0.35] },
-  4: { accuracy: 0.93, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.55, 0.55, 0.50, 0.45] },
+  4: { accuracy: 0.93, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.60, 0.55, 0.50, 0.45] },
 };
 
 // Latent participant skill: each simulated participant draws a z-score that
@@ -29,11 +32,12 @@ const SKILL_ACCURACY_SLOPE = 0.5;  // logit shift on accuracy per z
 const SKILL_RT_SLOPE = -0.15;      // ln(rt) shift per z (negative z ⇒ slower)
 const SKILL_KNOWIT_SLOPE = 0.4;    // logit shift on know-it hazard per z
 
-// Split of non-correct quiz outcomes. Mirrors the small tails visible in imageC
-// where most participants are correct and the residual skews toward timeouts.
-const FAILURE_INCORRECT = 0.25;
-const FAILURE_IDK = 0.25;
-// timeout is the remainder (0.50).
+// Split of non-correct quiz outcomes. Timeouts are rare (participants almost
+// always submit something before the clock runs out), so most failures are
+// split between IDK and plain incorrect, with a small timeout tail.
+const FAILURE_INCORRECT = 0.40;
+const FAILURE_IDK = 0.55;
+// timeout is the remainder (0.05).
 
 function randNormal(): number {
   // Box-Muller
