@@ -18,10 +18,10 @@ type Baselines = {
 // This also keeps the phrase-vs-no-phrase direction intact (phrase > no-phrase
 // on both accuracy and recall time).
 const MODE_BASELINES: Record<Mode, Baselines> = {
-  1: { accuracy: 0.94, rtMeanSec: 2.93, rtSdSec: 1.89, knowItHazard: [0.62, 0.61, 0.53, 0.35] },
-  2: { accuracy: 0.97, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.75, 0.65, 0.55, 0.45] },
-  3: { accuracy: 0.88, rtMeanSec: 3.80, rtSdSec: 2.55, knowItHazard: [0.55, 0.40, 0.45, 0.35] },
-  4: { accuracy: 0.93, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.60, 0.55, 0.50, 0.45] },
+  1: { accuracy: 0.94, rtMeanSec: 2.93, rtSdSec: 1.89, knowItHazard: [0.7619, 0.7000, 0.3333, 0.0000] },
+  2: { accuracy: 0.97, rtMeanSec: 2.67, rtSdSec: 1.89, knowItHazard: [0.7619, 0.5000, 0.2000, 0.0000] },
+  3: { accuracy: 0.88, rtMeanSec: 3.80, rtSdSec: 2.55, knowItHazard: [0.5476, 0.6842, 0.1667, 0.4000] },
+  4: { accuracy: 0.93, rtMeanSec: 3.28, rtSdSec: 1.59, knowItHazard: [0.4762, 0.5909, 0.6667, 0.3333] },
 };
 
 // Latent participant skill: each simulated participant draws a z-score that
@@ -147,7 +147,7 @@ function simulateParticipant(config: StudyConfig, index: number): SimParticipant
   // is removed from subsequent blocks, mirroring the real UI.
   const exposureCount = new Map<string, number>();
   const hasLearned = new Set<string>();
-  const maxExposuresPerPair = Math.max(2, config.flashcardBlockCount * 2);
+  const maxExposuresPerPair = 4;
 
   for (let block = 1; block <= config.flashcardBlockCount; block++) {
     const blockLabel = String(block);
@@ -159,7 +159,7 @@ function simulateParticipant(config: StudyConfig, index: number): SimParticipant
       const baseline = MODE_BASELINES[mode];
       const priorSoFar = exposureCount.get(person.id) ?? 0;
       if (priorSoFar >= maxExposuresPerPair) continue;
-      const budgetThisBlock = Math.min(2, maxExposuresPerPair - priorSoFar);
+      const budgetThisBlock = maxExposuresPerPair - priorSoFar;
 
       for (let k = 0; k < budgetThisBlock; k++) {
         const exposureNum = (exposureCount.get(person.id) ?? 0) + 1;

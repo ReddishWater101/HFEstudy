@@ -85,11 +85,6 @@ export function AccuracyChart({
         <h3 className="font-display text-2xl leading-none text-neutral-900">
           Testing accuracy by mode
         </h3>
-        <p className="max-w-3xl text-sm text-neutral-500">
-          End-of-study quiz outcome breakdown per mode. Colored segment is the fraction
-          correct; the bracket is the Wilson 95% CI on accuracy. Grayscale segments
-          show incorrect, IDK, and timeout.
-        </p>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">

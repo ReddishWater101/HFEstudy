@@ -77,12 +77,6 @@ export function LearningRateChart({
         <h3 className="font-display text-2xl leading-none text-neutral-900">
           Exposures until &quot;I know it&quot;
         </h3>
-        <p className="max-w-3xl text-sm text-neutral-500">
-          Each (participant, face) pair contributes one exposure sequence; the curve
-          shows the cumulative share of pairs that have been bucketed as
-          &quot;know-it&quot; at least once by that exposure. Higher and earlier is
-          faster learning. Pairs that never reach know-it keep the line below 100%.
-        </p>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -316,11 +310,6 @@ function StatsTable({
         </tbody>
       </table>
       <AnovaBlock anova={anova} />
-      <p className="text-[11px] leading-snug text-neutral-400">
-        Learned = share of pairs that ever reached know-it. Median exp. = median
-        number of exposures until first know-it (among pairs that learned). Pairs =
-        (participant, face) denominators for this mode. n = distinct participants.
-      </p>
     </div>
   );
 }

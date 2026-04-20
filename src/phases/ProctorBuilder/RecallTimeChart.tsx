@@ -105,11 +105,6 @@ export function RecallTimeChart({
         <h3 className="font-display text-2xl leading-none text-neutral-900">
           Recall time in quiz
         </h3>
-        <p className="max-w-3xl text-sm text-neutral-500">
-          Time from seeing a face to pressing Enter on a typed name, per quiz trial,
-          grouped by mode. Box = Q1/median/Q3, whiskers = 1.5&middot;IQR, dots = trials.
-          IDKs and timeouts excluded.
-        </p>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -423,9 +418,6 @@ function StatsTable({
         </tbody>
       </table>
       <AnovaBlock anova={anova} />
-      <p className="text-[11px] leading-snug text-neutral-400">
-        n = quiz trials (correct + incorrect). Cross marker in chart is the mean.
-      </p>
     </div>
   );
 }
