@@ -174,9 +174,9 @@ export function ResultsAnalyzer() {
 
       {hasData ? (
         <div className="flex flex-col gap-6">
-          <LearningRateChart data={deferredBatch.learning} />
-          <RecallTimeChart data={deferredBatch.recallTime} />
-          <AccuracyChart data={deferredBatch.accuracy} />
+          <LearningRateChart data={deferredBatch.learning} anova={deferredBatch.anovaLearning} />
+          <RecallTimeChart data={deferredBatch.recallTime} anova={deferredBatch.anovaRecallTime} />
+          <AccuracyChart data={deferredBatch.accuracy} anova={deferredBatch.anovaAccuracy} />
         </div>
       ) : !isLoading ? (
         <div className="flex max-w-2xl flex-col gap-2 text-sm text-neutral-500">

@@ -3,6 +3,7 @@ import {
   MODE_COLORS,
   MODE_LABELS,
   MODE_SHORT_LABELS,
+  type AnovaOutput,
   type LearningCurvePoint,
   type LearningData,
 } from '../../lib/resultsAnalyzer';
@@ -56,7 +57,13 @@ function formatExposures(value: number | null, digits = 1): string {
   return value.toFixed(digits);
 }
 
-export function LearningRateChart({ data }: { data: LearningData }) {
+export function LearningRateChart({
+  data,
+  anova,
+}: {
+  data: LearningData;
+  anova: AnovaOutput;
+}) {
   const hasData = data.points.length > 0;
   const maxExposure = Math.max(1, data.maxExposure);
   const xTicks = computeXTicks(maxExposure);
@@ -173,7 +180,7 @@ export function LearningRateChart({ data }: { data: LearningData }) {
         </div>
 
         <aside className="w-full shrink-0 lg:w-72">
-          <StatsTable summary={data.summary} />
+          <StatsTable summary={data.summary} anova={anova} />
         </aside>
       </div>
     </section>
@@ -259,7 +266,13 @@ function EmptyState() {
   );
 }
 
-function StatsTable({ summary }: { summary: LearningData['summary'] }) {
+function StatsTable({
+  summary,
+  anova,
+}: {
+  summary: LearningData['summary'];
+  anova: AnovaOutput;
+}) {
   return (
     <div className="flex flex-col gap-3">
       <h4 className="text-xs uppercase tracking-widest text-neutral-400">
@@ -302,11 +315,87 @@ function StatsTable({ summary }: { summary: LearningData['summary'] }) {
           ))}
         </tbody>
       </table>
+      <AnovaBlock anova={anova} />
       <p className="text-[11px] leading-snug text-neutral-400">
         Learned = share of pairs that ever reached know-it. Median exp. = median
         number of exposures until first know-it (among pairs that learned). Pairs =
         (participant, face) denominators for this mode. n = distinct participants.
       </p>
+    </div>
+  );
+}
+
+function formatF(value: number): string {
+  if (!Number.isFinite(value)) return '--';
+  return value.toFixed(2);
+}
+
+function formatP(value: number): string {
+  if (!Number.isFinite(value)) return '--';
+  if (value < 0.001) return '<.001';
+  return value.toFixed(3).replace(/^0/, '');
+}
+
+function formatEta(value: number): string {
+  if (!Number.isFinite(value)) return '--';
+  const clamped = Math.max(0, Math.min(0.999, value));
+  return clamped.toFixed(2).replace(/^0/, '');
+}
+
+function anovaUnavailableReason(anova: Extract<AnovaOutput, { ok: false }>): string {
+  switch (anova.info.reason) {
+    case 'no-complete-cases':
+      return 'no complete cases';
+    case 'one-group-only':
+      return 'need both Cue and NoCue participants';
+    case 'insufficient-data':
+      return 'need ≥2 participants per group';
+  }
+}
+
+function AnovaBlock({ anova }: { anova: AnovaOutput }) {
+  if (!anova.ok) {
+    return (
+      <div className="flex flex-col gap-2">
+        <h4 className="text-xs uppercase tracking-widest text-neutral-400">
+          ANOVA (mixed 2×2)
+        </h4>
+        <p className="text-[11px] text-neutral-400">
+          ANOVA unavailable — {anovaUnavailableReason(anova)}
+        </p>
+      </div>
+    );
+  }
+  const { effects, nCue, nNoCue } = anova.result;
+  const N = nCue + nNoCue;
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="text-xs uppercase tracking-widest text-neutral-400">
+        ANOVA (mixed 2×2)
+      </h4>
+      <table className="w-full text-[12px] text-neutral-700">
+        <thead>
+          <tr className="text-left text-[10px] uppercase tracking-widest text-neutral-400">
+            <th className="py-1 font-medium">Effect</th>
+            <th className="py-1 text-right font-medium">F</th>
+            <th className="py-1 text-right font-medium">p</th>
+            <th className="py-1 text-right font-medium">ηp²</th>
+          </tr>
+        </thead>
+        <tbody>
+          {effects.map((e) => (
+            <tr key={e.name} className="border-t border-neutral-100">
+              <td className="py-2">{e.name}</td>
+              <td className="py-2 text-right tabular-nums">{formatF(e.F)}</td>
+              <td className="py-2 text-right tabular-nums">{formatP(e.p)}</td>
+              <td className="py-2 text-right tabular-nums">
+                {formatEta(e.partialEtaSq)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="text-[11px] text-neutral-400">df = (1, {N - 2})</p>
     </div>
   );
 }

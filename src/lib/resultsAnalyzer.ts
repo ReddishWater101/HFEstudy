@@ -126,6 +126,33 @@ export type AccuracyModeData = {
   ci95Upper: number | null;
 };
 
+export type AnovaEffect = {
+  name: 'Group' | 'Modality' | 'Group × Modality';
+  F: number;
+  df1: number;
+  df2: number;
+  p: number;
+  partialEtaSq: number;
+};
+
+export type AnovaResult = {
+  effects: AnovaEffect[];
+  nCue: number;
+  nNoCue: number;
+  nExcluded: number;
+};
+
+export type AnovaUnavailable = {
+  reason: 'insufficient-data' | 'one-group-only' | 'no-complete-cases';
+  nCue: number;
+  nNoCue: number;
+  nExcluded: number;
+};
+
+export type AnovaOutput =
+  | { ok: true; result: AnovaResult }
+  | { ok: false; info: AnovaUnavailable };
+
 export type AnalyzerBatch = {
   sessions: UploadedAnalysisSession[];
   failures: UploadFailure[];
@@ -133,6 +160,9 @@ export type AnalyzerBatch = {
   learning: LearningData;
   recallTime: RecallTimeModeData[];
   accuracy: AccuracyModeData[];
+  anovaLearning: AnovaOutput;
+  anovaRecallTime: AnovaOutput;
+  anovaAccuracy: AnovaOutput;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -479,6 +509,499 @@ function buildAccuracy(sessions: UploadedAnalysisSession[]): AccuracyModeData[] 
   });
 }
 
+// ---------------------------------------------------------------------------
+// ANOVA (mixed 2x2: Group between, Modality within) — pure TS, no libraries.
+// ---------------------------------------------------------------------------
+
+type Modality = 'Audio' | 'Visual';
+type Group = 'Cue' | 'NoCue';
+
+// Mode -> (Group, Modality) mapping.
+// Mode 1 (P+T):  Cue,   Visual
+// Mode 2 (P+A):  Cue,   Audio
+// Mode 3 (NP+T): NoCue, Visual
+// Mode 4 (NP+A): NoCue, Audio
+function modeToFactors(mode: Mode): { group: Group; modality: Modality } {
+  switch (mode) {
+    case 1:
+      return { group: 'Cue', modality: 'Visual' };
+    case 2:
+      return { group: 'Cue', modality: 'Audio' };
+    case 3:
+      return { group: 'NoCue', modality: 'Visual' };
+    case 4:
+      return { group: 'NoCue', modality: 'Audio' };
+  }
+}
+
+function inferParticipantGroup(modes: Iterable<Mode>): Group | null {
+  let sawCue = false;
+  let sawNoCue = false;
+  for (const mode of modes) {
+    if (mode === 1 || mode === 2) sawCue = true;
+    else if (mode === 3 || mode === 4) sawNoCue = true;
+  }
+  if (sawCue && !sawNoCue) return 'Cue';
+  if (sawNoCue && !sawCue) return 'NoCue';
+  return null;
+}
+
+type ParticipantCell = {
+  participantId: string;
+  group: Group;
+  audio: number | null;
+  visual: number | null;
+};
+
+function gammaln(x: number): number {
+  const c = [
+    76.18009172947146, -86.50532032941677, 24.01409824083091,
+    -1.231739572450155, 0.001208650973866179, -0.000005395239384953,
+  ];
+  let y = x;
+  let tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (let j = 0; j < 6; j++) ser += c[j] / ++y;
+  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+}
+
+function betacf(a: number, b: number, x: number): number {
+  const MAXIT = 200;
+  const EPS = 3e-7;
+  const FPMIN = 1e-30;
+  const qab = a + b;
+  const qap = a + 1;
+  const qam = a - 1;
+  let c = 1;
+  let d = 1 - (qab * x) / qap;
+  if (Math.abs(d) < FPMIN) d = FPMIN;
+  d = 1 / d;
+  let h = d;
+  for (let m = 1; m <= MAXIT; m++) {
+    const m2 = 2 * m;
+    let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    h *= d * c;
+    aa = (-(a + m) * (qab + m) * x) / ((a + m2) * (qap + m2));
+    d = 1 + aa * d;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = 1 + aa / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < EPS) break;
+  }
+  return h;
+}
+
+function betainc(a: number, b: number, x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const bt = Math.exp(
+    gammaln(a + b) -
+      gammaln(a) -
+      gammaln(b) +
+      a * Math.log(x) +
+      b * Math.log(1 - x),
+  );
+  if (x < (a + 1) / (a + b + 2)) return (bt * betacf(a, b, x)) / a;
+  return 1 - (bt * betacf(b, a, 1 - x)) / b;
+}
+
+// Upper-tail p-value for F(df1, df2) at value f.
+function fPValue(f: number, df1: number, df2: number): number {
+  if (!Number.isFinite(f) || f <= 0) return 1;
+  const x = df2 / (df2 + df1 * f);
+  return betainc(df2 / 2, df1 / 2, x);
+}
+
+// Run a 2x2 mixed ANOVA on a list of participant cells. Participants missing
+// either modality score are dropped; counts are reported back via nExcluded.
+function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
+  const included = cells.filter((c) => c.audio !== null && c.visual !== null) as Array<
+    ParticipantCell & { audio: number; visual: number }
+  >;
+  const excluded = cells.length - included.length;
+
+  const cueCells = included.filter((c) => c.group === 'Cue');
+  const noCueCells = included.filter((c) => c.group === 'NoCue');
+  const nCue = cueCells.length;
+  const nNoCue = noCueCells.length;
+  const N = nCue + nNoCue;
+
+  if (N === 0) {
+    return {
+      ok: false,
+      info: { reason: 'no-complete-cases', nCue, nNoCue, nExcluded: excluded },
+    };
+  }
+  if (nCue === 0 || nNoCue === 0) {
+    return {
+      ok: false,
+      info: { reason: 'one-group-only', nCue, nNoCue, nExcluded: excluded },
+    };
+  }
+  if (nCue < 2 || nNoCue < 2 || N < 4) {
+    return {
+      ok: false,
+      info: { reason: 'insufficient-data', nCue, nNoCue, nExcluded: excluded },
+    };
+  }
+
+  // Grand mean across all 2N observations.
+  let sumAll = 0;
+  for (const c of included) sumAll += c.audio + c.visual;
+  const Mgrand = sumAll / (2 * N);
+
+  // Group means (across both modalities).
+  let sumCue = 0;
+  for (const c of cueCells) sumCue += c.audio + c.visual;
+  let sumNoCue = 0;
+  for (const c of noCueCells) sumNoCue += c.audio + c.visual;
+  const Mc = sumCue / (2 * nCue);
+  const Mn = sumNoCue / (2 * nNoCue);
+
+  // Modality means (across both groups).
+  let sumA = 0;
+  let sumV = 0;
+  for (const c of included) {
+    sumA += c.audio;
+    sumV += c.visual;
+  }
+  const Ma = sumA / N;
+  const Mv = sumV / N;
+
+  // Cell means.
+  let sumCA = 0;
+  let sumCV = 0;
+  for (const c of cueCells) {
+    sumCA += c.audio;
+    sumCV += c.visual;
+  }
+  let sumNA = 0;
+  let sumNV = 0;
+  for (const c of noCueCells) {
+    sumNA += c.audio;
+    sumNV += c.visual;
+  }
+  const Mca = sumCA / nCue;
+  const Mcv = sumCV / nCue;
+  const Mna = sumNA / nNoCue;
+  const Mnv = sumNV / nNoCue;
+
+  // Sums of squares.
+  let SSbetween = 0;
+  for (const c of included) {
+    const Sk = (c.audio + c.visual) / 2;
+    SSbetween += (Sk - Mgrand) * (Sk - Mgrand);
+  }
+  SSbetween *= 2;
+
+  const SSgroup =
+    2 *
+    (nCue * (Mc - Mgrand) * (Mc - Mgrand) + nNoCue * (Mn - Mgrand) * (Mn - Mgrand));
+  const SSsubjWithin = SSbetween - SSgroup;
+
+  let SStotal = 0;
+  for (const c of included) {
+    SStotal += (c.audio - Mgrand) * (c.audio - Mgrand);
+    SStotal += (c.visual - Mgrand) * (c.visual - Mgrand);
+  }
+  const SSwithin = SStotal - SSbetween;
+
+  const SSmodality =
+    N * ((Ma - Mgrand) * (Ma - Mgrand) + (Mv - Mgrand) * (Mv - Mgrand));
+
+  const iCA = Mca - Mc - Ma + Mgrand;
+  const iCV = Mcv - Mc - Mv + Mgrand;
+  const iNA = Mna - Mn - Ma + Mgrand;
+  const iNV = Mnv - Mn - Mv + Mgrand;
+  const SSinteraction =
+    nCue * iCA * iCA +
+    nCue * iCV * iCV +
+    nNoCue * iNA * iNA +
+    nNoCue * iNV * iNV;
+
+  const SSerrorWithin = SSwithin - SSmodality - SSinteraction;
+
+  const dfGroup = 1;
+  const dfSubjWithin = N - 2;
+  const dfModality = 1;
+  const dfInteraction = 1;
+  const dfErrorWithin = N - 2;
+
+  const msSubjWithin = SSsubjWithin / dfSubjWithin;
+  const msErrorWithin = SSerrorWithin / dfErrorWithin;
+
+  const Fgroup = msSubjWithin > 0 ? SSgroup / dfGroup / msSubjWithin : Number.POSITIVE_INFINITY;
+  const Fmodality =
+    msErrorWithin > 0 ? SSmodality / dfModality / msErrorWithin : Number.POSITIVE_INFINITY;
+  const Finteraction =
+    msErrorWithin > 0
+      ? SSinteraction / dfInteraction / msErrorWithin
+      : Number.POSITIVE_INFINITY;
+
+  const pGroup = fPValue(Fgroup, dfGroup, dfSubjWithin);
+  const pModality = fPValue(Fmodality, dfModality, dfErrorWithin);
+  const pInteraction = fPValue(Finteraction, dfInteraction, dfErrorWithin);
+
+  const etaGroup =
+    SSgroup + SSsubjWithin > 0 ? SSgroup / (SSgroup + SSsubjWithin) : 0;
+  const etaModality =
+    SSmodality + SSerrorWithin > 0 ? SSmodality / (SSmodality + SSerrorWithin) : 0;
+  const etaInteraction =
+    SSinteraction + SSerrorWithin > 0
+      ? SSinteraction / (SSinteraction + SSerrorWithin)
+      : 0;
+
+  return {
+    ok: true,
+    result: {
+      effects: [
+        {
+          name: 'Group',
+          F: Fgroup,
+          df1: dfGroup,
+          df2: dfSubjWithin,
+          p: pGroup,
+          partialEtaSq: etaGroup,
+        },
+        {
+          name: 'Modality',
+          F: Fmodality,
+          df1: dfModality,
+          df2: dfErrorWithin,
+          p: pModality,
+          partialEtaSq: etaModality,
+        },
+        {
+          name: 'Group × Modality',
+          F: Finteraction,
+          df1: dfInteraction,
+          df2: dfErrorWithin,
+          p: pInteraction,
+          partialEtaSq: etaInteraction,
+        },
+      ],
+      nCue,
+      nNoCue,
+      nExcluded: excluded,
+    },
+  };
+}
+
+// DV1 — Learning: proportion of (face) pairs ever bucketed know-it, per
+// participant-and-modality. Excludes participants whose modes span both groups.
+function collectLearningCells(sessions: UploadedAnalysisSession[]): ParticipantCell[] {
+  const cells: ParticipantCell[] = [];
+
+  // Deterministic participant order: alphabetical by participantId.
+  const sorted = sessions.slice().sort((a, b) =>
+    a.participantId < b.participantId ? -1 : a.participantId > b.participantId ? 1 : 0,
+  );
+
+  for (const session of sorted) {
+    const exposures = collectExposures(session);
+    const sessionModes = new Set<Mode>();
+    for (const exp of exposures) {
+      if (exp.mode !== null) sessionModes.add(exp.mode);
+    }
+    for (const mode of Object.values(session.modeAssignment)) {
+      sessionModes.add(mode);
+    }
+    const group = inferParticipantGroup(sessionModes);
+    if (group === null) continue;
+
+    // Key per (personId) -> track if any know-it occurred, grouped by modality.
+    const byPerson = new Map<string, { mode: Mode; firstKnowIt: number | null }>();
+    // Count exposures in chronological order (collectExposures already returns
+    // in chronological order).
+    const counts = new Map<string, number>();
+    for (const exp of exposures) {
+      if (exp.mode === null) continue;
+      const c = (counts.get(exp.personId) ?? 0) + 1;
+      counts.set(exp.personId, c);
+      const cur = byPerson.get(exp.personId) ?? { mode: exp.mode, firstKnowIt: null };
+      if (exp.bucket === 'know-it' && cur.firstKnowIt === null) {
+        cur.firstKnowIt = c;
+      }
+      byPerson.set(exp.personId, cur);
+    }
+
+    // Aggregate by modality.
+    let audioTotal = 0;
+    let audioLearned = 0;
+    let visualTotal = 0;
+    let visualLearned = 0;
+    for (const info of byPerson.values()) {
+      const { modality } = modeToFactors(info.mode);
+      if (modality === 'Audio') {
+        audioTotal += 1;
+        if (info.firstKnowIt !== null) audioLearned += 1;
+      } else {
+        visualTotal += 1;
+        if (info.firstKnowIt !== null) visualLearned += 1;
+      }
+    }
+
+    cells.push({
+      participantId: session.participantId,
+      group,
+      audio: audioTotal > 0 ? audioLearned / audioTotal : null,
+      visual: visualTotal > 0 ? visualLearned / visualTotal : null,
+    });
+  }
+
+  return cells;
+}
+
+// DV2 — Recall time: mean RT (seconds) across correct+incorrect trials per
+// participant-and-modality.
+function collectRecallTimeCells(sessions: UploadedAnalysisSession[]): ParticipantCell[] {
+  const cells: ParticipantCell[] = [];
+
+  const sorted = sessions.slice().sort((a, b) =>
+    a.participantId < b.participantId ? -1 : a.participantId > b.participantId ? 1 : 0,
+  );
+
+  for (const session of sorted) {
+    const attempts = collectQuizAttempts(session);
+    const sessionModes = new Set<Mode>();
+    for (const attempt of attempts) {
+      if (attempt.mode !== null) sessionModes.add(attempt.mode);
+    }
+    for (const mode of Object.values(session.modeAssignment)) {
+      sessionModes.add(mode);
+    }
+    const group = inferParticipantGroup(sessionModes);
+    if (group === null) continue;
+
+    let audioSum = 0;
+    let audioN = 0;
+    let visualSum = 0;
+    let visualN = 0;
+    for (const attempt of attempts) {
+      if (attempt.mode === null) continue;
+      if (attempt.outcome !== 'correct' && attempt.outcome !== 'incorrect') continue;
+      if (attempt.rtMs === null) continue;
+      const { modality } = modeToFactors(attempt.mode);
+      const seconds = attempt.rtMs / 1000;
+      if (modality === 'Audio') {
+        audioSum += seconds;
+        audioN += 1;
+      } else {
+        visualSum += seconds;
+        visualN += 1;
+      }
+    }
+
+    cells.push({
+      participantId: session.participantId,
+      group,
+      audio: audioN > 0 ? audioSum / audioN : null,
+      visual: visualN > 0 ? visualSum / visualN : null,
+    });
+  }
+
+  return cells;
+}
+
+// DV3 — Accuracy: proportion correct across all 4 outcomes per
+// participant-and-modality.
+function collectAccuracyCells(sessions: UploadedAnalysisSession[]): ParticipantCell[] {
+  const cells: ParticipantCell[] = [];
+
+  const sorted = sessions.slice().sort((a, b) =>
+    a.participantId < b.participantId ? -1 : a.participantId > b.participantId ? 1 : 0,
+  );
+
+  for (const session of sorted) {
+    const attempts = collectQuizAttempts(session);
+    const sessionModes = new Set<Mode>();
+    for (const attempt of attempts) {
+      if (attempt.mode !== null) sessionModes.add(attempt.mode);
+    }
+    for (const mode of Object.values(session.modeAssignment)) {
+      sessionModes.add(mode);
+    }
+    const group = inferParticipantGroup(sessionModes);
+    if (group === null) continue;
+
+    let audioCorrect = 0;
+    let audioTotal = 0;
+    let visualCorrect = 0;
+    let visualTotal = 0;
+    for (const attempt of attempts) {
+      if (attempt.mode === null) continue;
+      const { modality } = modeToFactors(attempt.mode);
+      if (modality === 'Audio') {
+        audioTotal += 1;
+        if (attempt.outcome === 'correct') audioCorrect += 1;
+      } else {
+        visualTotal += 1;
+        if (attempt.outcome === 'correct') visualCorrect += 1;
+      }
+    }
+
+    cells.push({
+      participantId: session.participantId,
+      group,
+      audio: audioTotal > 0 ? audioCorrect / audioTotal : null,
+      visual: visualTotal > 0 ? visualCorrect / visualTotal : null,
+    });
+  }
+
+  return cells;
+}
+
+// Count sessions whose modes span both groups (mixed) — those are excluded
+// and contribute to the "excluded" tally even though they never produced a
+// ParticipantCell. Uses modeAssignment as the canonical source.
+function countMixedGroupSessions(sessions: UploadedAnalysisSession[]): number {
+  let mixed = 0;
+  for (const session of sessions) {
+    const sessionModes = new Set<Mode>();
+    for (const mode of Object.values(session.modeAssignment)) {
+      sessionModes.add(mode);
+    }
+    if (sessionModes.size === 0) continue;
+    let sawCue = false;
+    let sawNoCue = false;
+    for (const mode of sessionModes) {
+      if (mode === 1 || mode === 2) sawCue = true;
+      else if (mode === 3 || mode === 4) sawNoCue = true;
+    }
+    if (sawCue && sawNoCue) mixed += 1;
+  }
+  return mixed;
+}
+
+function finalizeAnova(cells: ParticipantCell[], mixedCount: number): AnovaOutput {
+  const result = runMixedAnova(cells);
+  if (result.ok) {
+    return {
+      ok: true,
+      result: {
+        ...result.result,
+        nExcluded: result.result.nExcluded + mixedCount,
+      },
+    };
+  }
+  return {
+    ok: false,
+    info: {
+      ...result.info,
+      nExcluded: result.info.nExcluded + mixedCount,
+    },
+  };
+}
+
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   const text = String(value);
@@ -586,6 +1109,7 @@ export function buildAnalyzerBatch(
   sessions: UploadedAnalysisSession[],
   failures: UploadFailure[],
 ): AnalyzerBatch {
+  const mixed = countMixedGroupSessions(sessions);
   return {
     sessions,
     failures,
@@ -593,6 +1117,9 @@ export function buildAnalyzerBatch(
     learning: buildLearningData(sessions),
     recallTime: buildRecallTime(sessions),
     accuracy: buildAccuracy(sessions),
+    anovaLearning: finalizeAnova(collectLearningCells(sessions), mixed),
+    anovaRecallTime: finalizeAnova(collectRecallTimeCells(sessions), mixed),
+    anovaAccuracy: finalizeAnova(collectAccuracyCells(sessions), mixed),
   };
 }
 
