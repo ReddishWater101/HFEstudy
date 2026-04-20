@@ -7,6 +7,7 @@ import { ConfigSection } from './ConfigSection';
 import { PeopleGrid } from './PeopleGrid';
 import { PersonPreviewModal } from './PersonPreviewModal';
 import { ResultsAnalyzer } from './ResultsAnalyzer';
+import { ResultsSimulator } from './ResultsSimulator';
 import { builderReducer, initialBuilderState } from './reducer';
 
 export function ProctorBuilder() {
@@ -179,6 +180,8 @@ export function ProctorBuilder() {
         ) : null}
 
         <ResultsAnalyzer />
+
+        <ResultsSimulator />
       </div>
 
       <PersonPreviewModal
