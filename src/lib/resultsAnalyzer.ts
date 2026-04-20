@@ -127,7 +127,7 @@ export type AccuracyModeData = {
 };
 
 export type AnovaEffect = {
-  name: 'Group' | 'Modality' | 'Group × Modality';
+  name: 'Group' | 'Modality' | 'G × M';
   F: number;
   df1: number;
   df2: number;
@@ -787,7 +787,7 @@ function runMixedAnova(cells: ParticipantCell[]): AnovaOutput {
           generalizedEtaSq: gesModality,
         },
         {
-          name: 'Group × Modality',
+          name: 'G × M',
           F: Finteraction,
           df1: dfInteraction,
           df2: dfErrorWithin,

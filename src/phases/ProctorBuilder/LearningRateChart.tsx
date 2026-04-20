@@ -388,7 +388,7 @@ function AnovaBlock({ anova }: { anova: AnovaOutput }) {
             <th className="py-1 text-right font-medium">F</th>
             <th className="py-1 text-right font-medium">p</th>
             <th className="py-1 text-right font-medium">ges</th>
-            <th className="py-1 font-medium">Interpretation</th>
+            <th className="py-1 text-right font-medium">Interp</th>
           </tr>
         </thead>
         <tbody>
@@ -400,7 +400,7 @@ function AnovaBlock({ anova }: { anova: AnovaOutput }) {
               <td className="py-2 text-right tabular-nums">
                 {formatEta(e.generalizedEtaSq)}
               </td>
-              <td className="py-2 whitespace-nowrap text-[12px] text-neutral-600">
+              <td className="py-2 text-right whitespace-nowrap text-neutral-600">
                 {interpretP(e.p)}
               </td>
             </tr>
