@@ -69,34 +69,34 @@ export const MODE_COLORS: Record<Mode, string> = {
 
 export const ALL_MODES: readonly Mode[] = [1, 2, 3, 4];
 
-export type LearningBlockCell = {
-  blockIndex: number;
+// One point on the cumulative learn-it curve for a single mode.
+export type LearningCurvePoint = {
   mode: Mode;
-  // Mean across participants (equal weight per participant) of the per-participant
-  // mean number of exposures before the first "know-it" bucket, for faces in this
-  // mode during this block. Lower = faster learning.
-  meanExposures: number;
-  sem: number;
-  participantCount: number;
-  // Total (participant, face) pairs that reached "know-it" in this block for this mode.
-  sampleCount: number;
+  exposureNumber: number;
+  cumulativeLearned: number;
+  totalPairs: number;
+  rate: number;
 };
 
 export type LearningModeSummary = {
   mode: Mode;
   label: string;
+  // Total (participant, face) pairs in this mode across all uploaded sessions.
+  totalPairs: number;
+  // Pairs that reached "know-it" at least once during their exposures.
+  everLearned: number;
+  // everLearned / totalPairs. Null when totalPairs is 0.
+  finalRate: number | null;
+  // Median first-know-it exposure number among pairs that ever learned. Null if none did.
+  medianExposuresToLearn: number | null;
+  // Distinct participants contributing faces in this mode.
   participantCount: number;
-  totalSamples: number;
-  firstBlockMean: number | null;
-  lastBlockMean: number | null;
-  delta: number | null;
-  slopePerBlock: number | null;
 };
 
 export type LearningData = {
-  cells: LearningBlockCell[];
+  points: LearningCurvePoint[];
   summary: LearningModeSummary[];
-  blockIndices: number[];
+  maxExposure: number;
 };
 
 export type RecallTimeModeData = {
@@ -318,45 +318,22 @@ function wilsonInterval(successes: number, trials: number, z = 1.96): [number, n
   return [Math.max(0, (center - spread) / denom), Math.min(1, (center + spread) / denom)];
 }
 
-// Simple linear regression slope using least squares.
-function linearSlope(xs: number[], ys: number[]): number | null {
-  const n = xs.length;
-  if (n < 2) return null;
-  const meanX = xs.reduce((s, v) => s + v, 0) / n;
-  const meanY = ys.reduce((s, v) => s + v, 0) / n;
-  let num = 0;
-  let den = 0;
-  for (let i = 0; i < n; i++) {
-    num += (xs[i] - meanX) * (ys[i] - meanY);
-    den += (xs[i] - meanX) * (xs[i] - meanX);
-  }
-  if (den === 0) return null;
-  return num / den;
-}
-
 function buildLearningData(sessions: UploadedAnalysisSession[]): LearningData {
-  // For each (participant, block, face), count flashcard exposures up to and
-  // including the first "know-it" bucket (trials-to-criterion). Then:
-  //   1. Compute each participant's mean exposures-to-know-it per (block, mode).
-  //   2. Aggregate across participants: mean of per-participant means, equal weight.
-  // Faces the participant never rates "know-it" in that block contribute no sample.
-  const participantMeans = new Map<number, Map<Mode, number[]>>();
-  const sampleCounts = new Map<number, Map<Mode, number>>();
+  // For each (participant, face) pair, walk all exposures in chronological order
+  // across the entire session (blocks are ignored per spec) and record at which
+  // exposure number the first "know-it" bucket happens, or null if never.
+  // Denominator for each mode is the full set of pairs in that mode; pairs that
+  // never reach criterion keep the final rate below 100%.
+  const pairsByMode = new Map<Mode, Array<{ firstKnowIt: number | null }>>();
   const participantsPerMode = new Map<Mode, Set<string>>();
 
   for (const session of sessions) {
-    // Per (block, face): running exposure count and first know-it exposure index.
-    const perBlockPerson = new Map<
-      number,
-      Map<string, { count: number; mode: Mode; firstKnowIt: number | null }>
+    const byPerson = new Map<
+      string,
+      { count: number; mode: Mode; firstKnowIt: number | null }
     >();
     for (const exp of collectExposures(session)) {
       if (exp.mode === null) continue;
-      let byPerson = perBlockPerson.get(exp.blockIndex);
-      if (!byPerson) {
-        byPerson = new Map();
-        perBlockPerson.set(exp.blockIndex, byPerson);
-      }
       const cur = byPerson.get(exp.personId) ?? { count: 0, mode: exp.mode, firstKnowIt: null };
       cur.count += 1;
       if (exp.bucket === 'know-it' && cur.firstKnowIt === null) {
@@ -365,111 +342,76 @@ function buildLearningData(sessions: UploadedAnalysisSession[]): LearningData {
       byPerson.set(exp.personId, cur);
     }
 
-    // Group this participant's samples per (block, mode).
-    const perBlockModeSamples = new Map<number, Map<Mode, number[]>>();
-    for (const [blockIndex, byPerson] of perBlockPerson) {
-      for (const info of byPerson.values()) {
-        if (info.firstKnowIt === null) continue;
-        let byMode = perBlockModeSamples.get(blockIndex);
-        if (!byMode) {
-          byMode = new Map();
-          perBlockModeSamples.set(blockIndex, byMode);
-        }
-        const arr = byMode.get(info.mode) ?? [];
-        arr.push(info.firstKnowIt);
-        byMode.set(info.mode, arr);
+    for (const info of byPerson.values()) {
+      const arr = pairsByMode.get(info.mode) ?? [];
+      arr.push({ firstKnowIt: info.firstKnowIt });
+      pairsByMode.set(info.mode, arr);
+
+      let pm = participantsPerMode.get(info.mode);
+      if (!pm) {
+        pm = new Set();
+        participantsPerMode.set(info.mode, pm);
       }
-    }
-
-    // Push each participant's per-(block, mode) mean into the cross-participant bucket.
-    for (const [blockIndex, byMode] of perBlockModeSamples) {
-      for (const [mode, samples] of byMode) {
-        if (samples.length === 0) continue;
-        const m = samples.reduce((s, v) => s + v, 0) / samples.length;
-
-        let means = participantMeans.get(blockIndex);
-        if (!means) {
-          means = new Map();
-          participantMeans.set(blockIndex, means);
-        }
-        const arr = means.get(mode) ?? [];
-        arr.push(m);
-        means.set(mode, arr);
-
-        let cnt = sampleCounts.get(blockIndex);
-        if (!cnt) {
-          cnt = new Map();
-          sampleCounts.set(blockIndex, cnt);
-        }
-        cnt.set(mode, (cnt.get(mode) ?? 0) + samples.length);
-
-        let pm = participantsPerMode.get(mode);
-        if (!pm) {
-          pm = new Set();
-          participantsPerMode.set(mode, pm);
-        }
-        pm.add(session.participantId);
-      }
+      pm.add(session.participantId);
     }
   }
 
-  const cells: LearningBlockCell[] = [];
-  const blockSet = new Set<number>();
-  for (const [blockIndex, byMode] of participantMeans) {
-    blockSet.add(blockIndex);
-    for (const [mode, means] of byMode) {
-      const m = means.reduce((s, v) => s + v, 0) / means.length;
-      const sd = stdDev(means);
-      const sem = sd !== null ? sd / Math.sqrt(means.length) : 0;
-      cells.push({
-        blockIndex,
+  // Max x-axis value: largest first-know-it exposure across all modes. Beyond that
+  // all cumulative curves plateau, so there's no point plotting further.
+  let maxExposure = 0;
+  for (const pairs of pairsByMode.values()) {
+    for (const p of pairs) {
+      if (p.firstKnowIt !== null && p.firstKnowIt > maxExposure) {
+        maxExposure = p.firstKnowIt;
+      }
+    }
+  }
+  maxExposure = Math.max(maxExposure, 1);
+
+  const points: LearningCurvePoint[] = [];
+  for (const mode of ALL_MODES) {
+    const pairs = pairsByMode.get(mode) ?? [];
+    const totalPairs = pairs.length;
+    if (totalPairs === 0) continue;
+
+    // Precompute a sorted list of firstKnowIt values so cumulative is O(n) total.
+    const sortedFirst = pairs
+      .map((p) => p.firstKnowIt)
+      .filter((v): v is number => v !== null)
+      .sort((a, b) => a - b);
+
+    let cursor = 0;
+    for (let n = 1; n <= maxExposure; n++) {
+      while (cursor < sortedFirst.length && sortedFirst[cursor] <= n) cursor += 1;
+      points.push({
         mode,
-        meanExposures: m,
-        sem,
-        participantCount: means.length,
-        sampleCount: sampleCounts.get(blockIndex)?.get(mode) ?? 0,
+        exposureNumber: n,
+        cumulativeLearned: cursor,
+        totalPairs,
+        rate: cursor / totalPairs,
       });
     }
   }
-  cells.sort((a, b) => a.blockIndex - b.blockIndex || a.mode - b.mode);
-
-  const blockIndices = Array.from(blockSet).sort((a, b) => a - b);
 
   const summary: LearningModeSummary[] = ALL_MODES.map((mode) => {
-    const modeCells = cells
-      .filter((c) => c.mode === mode)
-      .sort((a, b) => a.blockIndex - b.blockIndex);
-    if (modeCells.length === 0) {
-      return {
-        mode,
-        label: MODE_LABELS[mode],
-        participantCount: 0,
-        totalSamples: 0,
-        firstBlockMean: null,
-        lastBlockMean: null,
-        delta: null,
-        slopePerBlock: null,
-      };
-    }
-    const first = modeCells[0];
-    const last = modeCells[modeCells.length - 1];
-    const totalSamples = modeCells.reduce((s, c) => s + c.sampleCount, 0);
-    const distinctParticipants = participantsPerMode.get(mode)?.size ?? 0;
-    const xs = modeCells.map((c) => c.blockIndex);
-    const ys = modeCells.map((c) => c.meanExposures);
+    const pairs = pairsByMode.get(mode) ?? [];
+    const totalPairs = pairs.length;
+    const learned = pairs
+      .map((p) => p.firstKnowIt)
+      .filter((v): v is number => v !== null);
+    const sortedLearned = learned.slice().sort((a, b) => a - b);
     return {
       mode,
       label: MODE_LABELS[mode],
-      participantCount: distinctParticipants,
-      totalSamples,
-      firstBlockMean: first.meanExposures,
-      lastBlockMean: last.meanExposures,
-      delta: last.meanExposures - first.meanExposures,
-      slopePerBlock: linearSlope(xs, ys),
+      totalPairs,
+      everLearned: learned.length,
+      finalRate: totalPairs > 0 ? learned.length / totalPairs : null,
+      medianExposuresToLearn: percentile(sortedLearned, 0.5),
+      participantCount: participantsPerMode.get(mode)?.size ?? 0,
     };
   });
 
-  return { cells, summary, blockIndices };
+  return { points, summary, maxExposure };
 }
 
 function buildRecallTime(sessions: UploadedAnalysisSession[]): RecallTimeModeData[] {
@@ -655,25 +597,23 @@ export function buildAnalyzerBatch(
 }
 
 export async function exportAnalyzerBatch(batch: AnalyzerBatch): Promise<void> {
-  const learningRows = batch.learning.cells.map((c) => ({
-    mode: c.mode,
-    modeLabel: MODE_LABELS[c.mode],
-    blockIndex: c.blockIndex,
-    meanExposuresToKnowIt: c.meanExposures,
-    sem: c.sem,
-    participantCount: c.participantCount,
-    sampleCount: c.sampleCount,
+  const learningRows = batch.learning.points.map((p) => ({
+    mode: p.mode,
+    modeLabel: MODE_LABELS[p.mode],
+    exposureNumber: p.exposureNumber,
+    cumulativeLearned: p.cumulativeLearned,
+    totalPairs: p.totalPairs,
+    rate: p.rate,
   }));
 
   const learningSummaryRows = batch.learning.summary.map((s) => ({
     mode: s.mode,
     modeLabel: s.label,
     participantCount: s.participantCount,
-    totalSamples: s.totalSamples,
-    firstBlockMean: s.firstBlockMean,
-    lastBlockMean: s.lastBlockMean,
-    deltaFirstToLast: s.delta,
-    slopePerBlock: s.slopePerBlock,
+    totalPairs: s.totalPairs,
+    everLearned: s.everLearned,
+    finalRate: s.finalRate,
+    medianExposuresToLearn: s.medianExposuresToLearn,
   }));
 
   const recallTrialRows: Array<{ mode: Mode; modeLabel: string; rtSec: number }> = [];
@@ -710,8 +650,8 @@ export async function exportAnalyzerBatch(batch: AnalyzerBatch): Promise<void> {
   }));
 
   const zip = new JSZip();
-  zip.file('learning_rate_by_block.csv', toCsv(learningRows));
-  zip.file('learning_rate_summary.csv', toCsv(learningSummaryRows));
+  zip.file('learning_curve_by_exposure.csv', toCsv(learningRows));
+  zip.file('learning_curve_summary.csv', toCsv(learningSummaryRows));
   zip.file('recall_time_trials.csv', toCsv(recallTrialRows));
   zip.file('recall_time_summary.csv', toCsv(recallSummaryRows));
   zip.file('testing_accuracy.csv', toCsv(accuracyRows));
